@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "834925864023",
+    "project_id": "detoxapp-b7f2d",
+    "storage_bucket": "detoxapp-b7f2d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:834925864023:android:c253c8bae4d4bb5e846f12",
+        "android_client_info": {
+          "package_name": "com.example.detoxapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBXo8rLXK6vFID3gDkd3sD7m6VqQoSs10U"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
