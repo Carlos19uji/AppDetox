@@ -250,7 +250,7 @@ suspend fun startChallengeForGroup(groupId: String, porcentaje: Int) {
         )
     )
     for (userId in members.keys) {
-        val userRef = db.collection("users").document(userId)
+        val userRef = db.collection("users").document(userId).collection("groups").document(groupId)
 
         userRef.collection("phases").document("phase1").set(
             mapOf(

@@ -32,6 +32,9 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import kotlin.math.pow
 
 @Composable
 fun PhaseIntroScreen(
@@ -44,12 +47,17 @@ fun PhaseIntroScreen(
     val groupId = groupViewModel.groupId.value ?: return
     val coroutineScope = rememberCoroutineScope()
 
+    val today = LocalDate.now()
+    val formatter = DateTimeFormatter.ofPattern("dd-MM-yyyy")
+    val startDate = today.format(formatter)
+    val endDate = today.plusDays(7).format(formatter)
+
     val (phaseInfo, setPhaseInfo) = remember { mutableStateOf<PhaseInfo?>(null) }
     val (userName, setUserName) = remember { mutableStateOf("Usuario") }
     val (currentPhase, setCurrentPhase) = remember { mutableStateOf(1) }
-    val (mediaFaseAnterior, setMediaFaseAnterior) = remember { mutableStateOf<Long?>(null) }
-    val (targetUsage, setTargetUsage) = remember { mutableStateOf<Long?>(null) }
-    val (mediaInicioReto, setMediaInicioReto) = remember { mutableStateOf<Long?>(null) } // Nueva variable
+    val (mediaFaseAnterior, setMediaFaseAnterior) = remember { mutableStateOf<Double?>(null) }
+    val (targetUsage, setTargetUsage) = remember { mutableStateOf<Double?>(null) }
+    val (mediaInicioReto, setMediaInicioReto) = remember { mutableStateOf<Double?>(null) }
 
     LaunchedEffect(Unit) {
         val groupDoc = db.collection("groups").document(groupId).get().await()
@@ -61,37 +69,37 @@ fun PhaseIntroScreen(
         setCurrentPhase(userPhase)
         setPhaseInfo(getPhaseDetails(userPhase))
 
-        // Obtener la media de la fase anterior
-        if (userPhase > 1) {
-            val media = fetchPhaseAverageUsage(userId, userPhase - 1)
-            setMediaFaseAnterior(media)
+        val mediaInicio = fetchPhaseAverageUsage(userId, 1, groupId)?.toDouble()
+        setMediaInicioReto(mediaInicio)
 
-            val mediaInicio = fetchPhaseAverageUsage(userId, 1) // Suponiendo que la fase 1 es el inicio del reto
-            setMediaInicioReto(mediaInicio)
+        if (userPhase > 1) {
+            val media = fetchPhaseAverageUsage(userId, userPhase - 1, groupId)?.toDouble()
+            setMediaFaseAnterior(media)
 
             val configSnapshot = db.collection("groups").document(groupId)
                 .collection("reto").document("config").get().await()
-            val porcentajeSemanal = configSnapshot.getLong("porcentajeSemanal")?.toInt() ?: 25
+            val porcentajeSemanal = configSnapshot.getDouble("porcentajeSemanal") ?: 25.0
+
             val factor = 1 - (porcentajeSemanal / 100.0)
-            val target = (media ?: 0L) * factor
-            setTargetUsage(target.toLong())
+            val exponent = userPhase - 1
+            val target = (mediaInicio ?: 0.0) * factor.pow(exponent)
+            setTargetUsage(target)
         }
     }
 
-    fun formatMillisToTime(millis: Long): String {
-        val seconds = millis / 1000
+    fun formatMillisToTime(millis: Double): String {
+        val seconds = (millis / 1000).toLong()
         val hours = seconds / 3600
         val minutes = (seconds % 3600) / 60
         return "${hours} horas ${minutes} minutos"
     }
 
-    fun calculateReductionPercentage(oldValue: Long?, newValue: Long?): Float {
-        if (oldValue == null || newValue == null || oldValue == 0L) return 0f
-        return ((oldValue - newValue).toFloat() / oldValue) * 100
+    fun calculateReductionPercentage(oldValue: Double?, newValue: Double?): Float {
+        if (oldValue == null || newValue == null || oldValue == 0.0) return 0f
+        return (((oldValue - newValue) / oldValue) * 100).toFloat()
     }
 
     phaseInfo?.let { phase ->
-
         val reductionPhasePercentage = calculateReductionPercentage(mediaFaseAnterior, targetUsage)
         val reductionStartPercentage = calculateReductionPercentage(mediaInicioReto, targetUsage)
 
@@ -155,26 +163,23 @@ fun PhaseIntroScreen(
                         color = Color(0xFF9CA3DB),
                         textAlign = TextAlign.Center
                     )
-
                     Spacer(modifier = Modifier.height(16.dp))
                     if (reductionPhasePercentage > 0f) {
                         Text(
-                            text = "Cumpliendo esta fase habrás reducido al menos un ${reductionPhasePercentage.toInt()}% el uso del móvil respecto a la fase anterior.",
+                            text = "Cumpliendo esta fase habrás reducido al menos un ${"%.0f".format(reductionPhasePercentage)}% el uso del movil respecto a la fase anterior.",
                             fontSize = 16.sp,
                             color = Color.White,
                             textAlign = TextAlign.Center
                         )
                     }
-                    if (currentPhase > 2) {
+                    if (currentPhase > 2 && reductionStartPercentage > 0f) {
                         Spacer(modifier = Modifier.height(16.dp))
-                        if (reductionStartPercentage > 0f) {
-                            Text(
-                                text = "Esto supone haber reducido en al menos un ${reductionStartPercentage.toInt()}% respecto a cuando empezaste el reto.",
-                                fontSize = 16.sp,
-                                color = Color.White,
-                                textAlign = TextAlign.Center
-                            )
-                        }
+                        Text(
+                            text = "Esto supone haber reducido en al menos un ${"%.0f".format(reductionStartPercentage)}% respecto al inicio del reto.",
+                            fontSize = 16.sp,
+                            color = Color.White,
+                            textAlign = TextAlign.Center
+                        )
                     }
                 }
             }
@@ -182,10 +187,15 @@ fun PhaseIntroScreen(
             Button(
                 onClick = {
                     coroutineScope.launch {
-                        if (currentPhase > 1) {
-                            savePhaseForUser(userId, currentPhase, mediaFaseAnterior)
-                        }
                         updateUserStageInGroup(groupId, userId)
+                        val userRef = db.collection("users").document(userId).collection("groups").document(groupId)
+
+                        val phaseData = mapOf(
+                            "fase" to currentPhase,
+                            "fecha_inicio" to startDate,
+                            "fecha_fin" to endDate
+                        )
+                        userRef.collection("phases").document("phase${currentPhase}").set(phaseData)
                         navController.navigate(Screen.Objectives.route)
                     }
                 },

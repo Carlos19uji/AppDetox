@@ -19,3 +19,10 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# Mantener clases necesarias para Google Play Services Ads (Google Advertising ID)
+-keep class com.google.android.gms.** { *; }
+
+# Si usas soporte para dispositivos Huawei sin Google Mobile Services
+-keep class com.huawei.hms.ads.** { *; }
+-keep interface com.huawei.hms.ads.** { *; }

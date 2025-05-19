@@ -4,6 +4,7 @@ import com.google.firebase.Timestamp
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.UUID
 
 data class GroupData(
     val groupName: String = "",
@@ -38,7 +39,11 @@ data class DailyUsage(
 data class RankingEntry(
     val userId: String,
     val name: String,
-    val averageDailyUsage: Long
+    val averageDailyUsage: Long,
+    val phase: Int,
+    val phaseAverageUsage: Long?,
+    val percentageChange: Double?,
+    val photoUrl: String? = null
 )
 
 data class PhaseInfo(
@@ -49,7 +54,16 @@ data class PhaseInfo(
 
 data class Challenge(
     val title: String,
-    val description: String
+    val description: String,
+    val isManuallyCheckable: Boolean
+)
+
+data class Message(
+    val id: String = UUID.randomUUID().toString(),
+    val userId: String,
+    val timestamp: String,
+    val text: String,
+    val name: String
 )
 
 fun formatTime(millis: Long): String {

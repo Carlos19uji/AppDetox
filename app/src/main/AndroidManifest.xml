@@ -2,27 +2,87 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+
+    <!-- ✅ Permisos necesarios -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission android:name="com.google.android.gms.permission.AD_ID" />
+
+    <!-- ✅ Para consultar otras apps -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.SEND" />
+            <data android:mimeType="text/plain" />
+        </intent>
+    </queries>
+
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@drawable/logodetox"
         android:label="@string/app_name"
-        android:roundIcon="@mipmap/ic_launcher_round"
+        android:roundIcon="@drawable/logodetox"
         android:supportsRtl="true"
         android:theme="@style/Theme.DetoxApp"
         tools:targetApi="31">
+
+        <!-- ✅ Branch Keys -->
+        <meta-data
+            android:name="io.branch.sdk.BranchKey"
+            android:value="key_live_mxDfhRTxmE6OrzqndDL6ggblExbGK4wR" />
+
+        <!-- ✅ AdMob -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-7055736346592282~4373358224" />
+
+        <!-- ✅ MainActivity -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
             android:theme="@style/Theme.DetoxApp">
+
+            <!-- 🔰 Launcher -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity>
-    </application>
 
+            <!-- 🔗 Branch App Links - Live -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="y6o0b.app.link" />
+                <data android:scheme="https" android:host="y6o0b-alternate.app.link" />
+            </intent-filter>
+
+            <!-- 🔗 Branch App Links - Test -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="y6o0b.test-app.link" />
+                <data android:scheme="https" android:host="y6o0b-alternate.test-app.link" />
+            </intent-filter>
+
+            <!-- 🔗 URI Scheme -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="detoxapp" android:host="open" />
+            </intent-filter>
+
+        </activity>
+
+    </application>
 </manifest>

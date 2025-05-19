@@ -1,6 +1,7 @@
 package com.example.detoxapp
 
 import android.util.Log
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -13,24 +14,32 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.material.Icon
+import androidx.compose.material.AlertDialog
+import androidx.compose.material.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material.Text
+import androidx.compose.material.TextButton
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -43,10 +52,19 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
 
+
 @Composable
-fun TopBarGroup(navController: NavController, groupViewModel: GroupViewModel) {
+fun TopBarGroup(
+    navController: NavController,
+    groupViewModel: GroupViewModel,
+    auth: FirebaseAuth,
+    modifier: Modifier = Modifier
+) {
+    val expanded = remember { mutableStateOf(false) }
+    val showLogOutDialog = remember { mutableStateOf(false) }
+
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .background(Color.Black)
             .height(56.dp)
@@ -54,38 +72,158 @@ fun TopBarGroup(navController: NavController, groupViewModel: GroupViewModel) {
         contentAlignment = Alignment.CenterStart
     ) {
         Row(
+            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Icon(
-                imageVector = Icons.Default.ArrowBack,
-                contentDescription = "Volver",
-                tint = Color.White,
-                modifier = Modifier
-                    .clickable {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.ArrowBack,
+                    contentDescription = "Volver",
+                    tint = Color.White,
+                    modifier = Modifier.clickable {
                         groupViewModel.setGroupId(null)
-                        navController.popBackStack(route = Screen.Home.route, inclusive = false)
+                        navController.popBackStack(Screen.Home.route, false)
                         navController.navigate(Screen.Home.route)
                     }
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "Grupos",
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White,
-                modifier = Modifier
-                    .clickable {
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Grupos",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    modifier = Modifier.clickable {
                         groupViewModel.setGroupId(null)
-                        navController.popBackStack(route = Screen.Home.route, inclusive = false)
+                        navController.popBackStack(Screen.Home.route, false)
                         navController.navigate(Screen.Home.route)
                     }
-            )
+                )
+            }
+
+            Spacer(modifier = Modifier.width(250.dp))
+
+            TopBarMenu(navController, auth, expanded, showLogOutDialog)
         }
     }
 }
 
 @Composable
-fun BottomBar(navController: NavController, groupViewModel: GroupViewModel, auth: FirebaseAuth) {
+fun HomeTopBar(
+    navController: NavController,
+    auth: FirebaseAuth,
+    modifier: Modifier = Modifier
+) {
+    val expanded = remember { mutableStateOf(false) }
+    val showLogOutDialog = remember { mutableStateOf(false) }
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(Color.Black)
+            .height(56.dp)
+            .padding(horizontal = 16.dp),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = "DetoxApp",
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = 20.sp
+            )
+
+            Spacer(modifier = Modifier.width(260.dp))
+
+            TopBarMenu(navController, auth, expanded, showLogOutDialog)
+        }
+    }
+}
+
+@Composable
+fun TopBarMenu(
+    navController: NavController,
+    auth: FirebaseAuth,
+    expanded: MutableState<Boolean>,
+    showLogOutDialog: MutableState<Boolean>
+) {
+    Icon(
+        imageVector = Icons.Default.Menu,
+        contentDescription = "Menu",
+        tint = Color.White,
+        modifier = Modifier.clickable { expanded.value = true }
+    )
+
+    Box(modifier = Modifier.fillMaxWidth()) {
+        DropdownMenu(
+            expanded = expanded.value,
+            onDismissRequest = { expanded.value = false },
+            modifier = Modifier.align(Alignment.TopEnd)
+        ) {
+            DropdownMenuItem(
+                text = { Text("Editar perfil") },
+                onClick = {
+                    navController.navigate(Screen.EditProfile.route)
+                    expanded.value = false
+                }
+            )
+            DropdownMenuItem(
+                text = { Text("Cerrar Sesión") },
+                onClick = {
+                    showLogOutDialog.value = true
+                    expanded.value = false
+                }
+            )
+        }
+    }
+
+    if (showLogOutDialog.value) {
+        LogOutConfirmationDialog(
+            onConfirm = {
+                auth.signOut()
+                navController.navigate(Screen.Start.route) {
+                    popUpTo(Screen.Start.route) { inclusive = true }
+                }
+                showLogOutDialog.value = false
+            },
+            onCancel = {
+                showLogOutDialog.value = false
+            }
+        )
+    }
+}
+
+
+@Composable
+fun LogOutConfirmationDialog(onConfirm: () -> Unit, onCancel: () -> Unit){
+
+    AlertDialog(
+        onDismissRequest = { onCancel },
+        title =  { Text("¿Estas seguro de que quieres cerrar sesion?") },
+        confirmButton = {
+            TextButton( onClick = onConfirm) {
+                Text("Si")
+            }
+        },
+        dismissButton = {
+            TextButton( onClick = onCancel) {
+                Text("Cancelar")
+            }
+        }
+    )
+}
+
+@Composable
+fun BottomBar(
+    navController: NavController,
+    groupViewModel: GroupViewModel,
+    auth: FirebaseAuth,
+    modifier: Modifier = Modifier
+) {
     val groupId = groupViewModel.groupId.value ?: run {
         Log.e("BottomBar", "Group ID is null, cannot render bottom bar")
         return
@@ -153,7 +291,7 @@ fun BottomBar(navController: NavController, groupViewModel: GroupViewModel, auth
     }
 
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .background(Color.Black)
             .padding(vertical = 8.dp),
@@ -208,7 +346,7 @@ fun BottomBar(navController: NavController, groupViewModel: GroupViewModel, auth
             )
         }
 
-        // Phase button
+        // Fase button
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.clickable {
@@ -216,15 +354,26 @@ fun BottomBar(navController: NavController, groupViewModel: GroupViewModel, auth
                 onPhaseClick()
             }
         ) {
+            val currentRoute = navController.currentDestination?.route
+
+            val faseColor = if (currentRoute == Screen.Previa.route ||
+                currentRoute == Screen.PhaseIntroScreen.route ||
+                currentRoute == Screen.Objectives.route ||
+                currentRoute == Screen.PhaseEndScreen.route) {
+                Color.White
+            } else {
+                Color.Gray
+            }
+
             Icon(
                 imageVector = Icons.Default.KeyboardArrowUp,
                 contentDescription = "Objetivos",
-                tint = Color.White,
+                tint = faseColor,
                 modifier = Modifier.size(24.dp)
             )
             Text(
                 "Fase",
-                color = Color.White,
+                color = faseColor,
                 fontSize = 12.sp
             )
         }
@@ -266,12 +415,12 @@ fun BottomBar(navController: NavController, groupViewModel: GroupViewModel, auth
         ) {
             Icon(
                 imageVector = Icons.Default.Edit,
-                contentDescription = "Messages",
+                contentDescription = "Reflexiones",
                 tint = if (navController.currentDestination?.route == Screen.Messages.route) Color.White else Color.Gray,
                 modifier = Modifier.size(24.dp)
             )
             Text(
-                "Messages",
+                "Reflexiones",
                 color = if (navController.currentDestination?.route == Screen.Messages.route) Color.White else Color.Gray,
                 fontSize = 12.sp
             )

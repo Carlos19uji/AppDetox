@@ -1,5 +1,6 @@
 package com.example.detoxapp
 
+import android.app.Activity
 import android.util.Log
 import android.widget.Space
 import android.widget.Toast
@@ -48,33 +49,61 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import com.google.android.gms.ads.AdError
+import com.google.android.gms.ads.FullScreenContentCallback
+import com.google.android.gms.ads.LoadAdError
+import com.google.android.gms.ads.interstitial.InterstitialAd
+import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-
+import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
+import com.google.android.gms.ads.AdRequest
 
 @Composable
 fun HomeScreen(navController: NavController, auth: FirebaseAuth, groupViewModel: GroupViewModel = viewModel()) {
-
     val db = FirebaseFirestore.getInstance()
     val userID = auth.currentUser?.uid ?: return
+
+    val context = LocalContext.current
+    val activity = context as? Activity
+
+    var interstitialAd by remember { mutableStateOf<InterstitialAd?>(null) }
+    val adRequest = remember { AdRequest.Builder().build() }
+
+    LaunchedEffect(Unit) {
+        InterstitialAd.load(
+            context,
+            "ca-app-pub-7055736346592282/7121992255", // ← Reemplaza con tu ID de bloque
+            adRequest,
+            object : InterstitialAdLoadCallback() {
+                override fun onAdLoaded(ad: InterstitialAd) {
+                    interstitialAd = ad
+                }
+
+                override fun onAdFailedToLoad(adError: LoadAdError) {
+                    interstitialAd = null
+                }
+            }
+        )
+    }
 
     var loadingState by remember { mutableStateOf(true) }
     var groups by remember { mutableStateOf<List<GroupData>>(emptyList()) }
     var showCreateDialog by remember { mutableStateOf(false) }
     var showJoinDialog by remember { mutableStateOf(false) }
 
+    // Firestore loading
     LaunchedEffect(userID) {
-        Log.d("HomeScreen", "Fetching groups for userID: $userID")
         db.collection("users").document(userID).collection("groups").get()
             .addOnSuccessListener { result ->
                 val groupIds = result.documents.mapNotNull { it.getString("groupId") }
-                Log.d("HomeScreen", "Group IDs retrieved: $groupIds")
-
                 if (groupIds.isEmpty()) {
-                    Log.d("HomeScreen", "No groups found for this user.")
                     groups = emptyList()
                     loadingState = false
                     return@addOnSuccessListener
@@ -84,242 +113,170 @@ fun HomeScreen(navController: NavController, auth: FirebaseAuth, groupViewModel:
                     .whereIn(FieldPath.documentId(), groupIds.take(10))
                     .get()
                     .addOnSuccessListener { groupDocs ->
-                        Log.d("HomeScreen", "Successfully retrieved group documents.")
                         val groupList = groupDocs.mapNotNull { doc ->
-                            val groupName = doc.getString("groupName") ?: run {
-                                Log.e("HomeScreen", "Group name is null for doc ${doc.id}")
-                                return@mapNotNull null
-                            }
-
-                            val membersRaw = doc.get("members") as? Map<*, *> ?: run {
-                                Log.e("HomeScreen", "Members map is null for group $groupName (${doc.id})")
-                                return@mapNotNull null
-                            }
+                            val groupName = doc.getString("groupName") ?: return@mapNotNull null
+                            val membersRaw = doc.get("members") as? Map<*, *> ?: return@mapNotNull null
 
                             val members = membersRaw.mapNotNull { entry ->
                                 val userId = entry.key as? String ?: return@mapNotNull null
                                 val memberMap = entry.value as? Map<*, *> ?: return@mapNotNull null
-
                                 val name = memberMap["name"] as? String ?: return@mapNotNull null
                                 val phase = (memberMap["phase"] as? Long)?.toInt() ?: 1
                                 val etapa = memberMap["etapa"] as? String ?: "Intro"
                                 val timestamp = memberMap["phaseStartDate"] as? Timestamp ?: Timestamp.now()
-
                                 val challengesRaw = memberMap["challengesCompleted"] as? Map<*, *>
                                 val challengesCompleted = challengesRaw?.mapNotNull {
-                                    val key = (it.key as? String) ?: return@mapNotNull null
+                                    val key = it.key as? String ?: return@mapNotNull null
                                     val value = it.value as? Boolean ?: return@mapNotNull null
                                     key to value
                                 }?.toMap() ?: emptyMap()
 
-                                userId to MemberData(
-                                    name = name,
-                                    phase = phase,
-                                    challengesCompleted = challengesCompleted,
-                                    phaseStartDate = timestamp,
-                                    etapa = etapa
-                                )
+                                userId to MemberData(name, phase, challengesCompleted, timestamp, etapa)
                             }.toMap()
 
-                            val groupID = doc.id
-                            Log.d("HomeScreen", "Group loaded: $groupName (ID: $groupID) with ${members.size} members")
-                            GroupData(groupName, members, groupID)
+                            GroupData(groupName, members, doc.id)
                         }
-
                         groups = groupList
                         loadingState = false
-                        Log.d("HomeScreen", "Finished loading groups. Count: ${groupList.size}")
                     }
-                    .addOnFailureListener {
-                        Log.e("HomeScreen", "Error loading group documents: ${it.message}", it)
-                        loadingState = false
-                    }
+                    .addOnFailureListener { loadingState = false }
             }
-            .addOnFailureListener {
-                Log.e("HomeScreen", "Error fetching user group references: ${it.message}", it)
-                loadingState = false
-            }
+            .addOnFailureListener { loadingState = false }
     }
 
-    LazyColumn(
+    // Main layout with bottom-fixed buttons
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .padding(20.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        contentPadding = PaddingValues(vertical = 32.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        when {
-            loadingState -> {
-                item {
-                    Log.d("HomeScreen", "Loading state active - showing spinner")
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator(color = Color.White)
+        Column(modifier = Modifier.fillMaxSize()) {
+            // Content section
+            LazyColumn(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                contentPadding = PaddingValues(top = 24.dp, bottom = 16.dp)
+            ) {
+                when {
+                    loadingState -> {
+                        item {
+                            CircularProgressIndicator(color = Color.White)
+                        }
                     }
-                }
-            }
 
-            groups.isEmpty() -> {
-                item {
-                    Log.d("HomeScreen", "No groups to show - showing onboarding options")
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Text("HomeScreen", color = Color(0xFFFFD54F), fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                    groups.isEmpty() -> {
+                        item {
+                            Spacer(modifier = Modifier.height(32.dp))
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth(0.9f)
+                                    .background(Color(0xFF444444), RoundedCornerShape(16.dp))
+                                    .padding(24.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("¡Casi Listo!", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        "Crea o únete a un grupo para comenzar",
+                                        color = Color.White,
+                                        fontSize = 18.sp,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                            }
+                        }
                     }
-                    Box(
-                        modifier = Modifier
-                            .padding(16.dp)
-                            .fillMaxWidth(0.8f)
-                            .background(Color(0xFF444444), RoundedCornerShape(16.dp))
-                            .padding(24.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+
+                    else -> {
+                        item {
+                            Spacer(modifier = Modifier.height(16.dp))
                             Text(
-                                text = "¡Casi Listo!",
+                                text = "Grupos:",
                                 color = Color.White,
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "Crea o únete a un grupo para comenzar",
-                                color = Color.White,
-                                fontSize = 18.sp,
+                                fontSize = 24.sp,
+                                fontWeight = FontWeight.Bold,
                                 textAlign = TextAlign.Center
                             )
-                            Spacer(modifier = Modifier.height(24.dp))
-                            Button(
-                                onClick = { showCreateDialog = true },
-                                colors = ButtonDefaults.buttonColors(backgroundColor = Color(0xFF888888)),
-                                shape = RoundedCornerShape(50),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text("+ Crear grupo", color = Color.White, fontSize = 18.sp)
+                            Spacer(modifier = Modifier.height(32.dp))
+                        }
+                        groups.forEach { group ->
+                            item {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth(0.9f)
+                                        .padding(vertical = 8.dp)
+                                        .background(Color(0xFF444444), RoundedCornerShape(12.dp))
+                                        .clickable {
+                                            groupViewModel.setGroupId(group.groupID)
+
+                                            interstitialAd?.fullScreenContentCallback =
+                                                object : FullScreenContentCallback() {
+                                                    override fun onAdDismissedFullScreenContent() {
+                                                        interstitialAd = null
+                                                        navController.navigate(Screen.Group.createRoute(group.groupID))
+                                                    }
+
+                                                    override fun onAdFailedToShowFullScreenContent(adError: AdError) {
+                                                        navController.navigate(Screen.Group.createRoute(group.groupID))
+                                                    }
+                                                }
+
+                                            if (interstitialAd != null && activity != null) {
+                                                interstitialAd?.show(activity)
+                                            } else {
+                                                navController.navigate(Screen.Group.createRoute(group.groupID))
+                                            }
+                                        }
+                                        .padding(16.dp)
+                                ) {
+                                    Text("Grupo: ${group.groupName}", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                                }
                             }
-                            OutlinedButton(
-                                onClick = { showJoinDialog = true },
-                                shape = RoundedCornerShape(50),
-                                border = BorderStroke(1.dp, Color.White),
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(text="Unirse a un grupo",color= Color.Black, fontSize = 18.sp)
-                            }
-                            Spacer(modifier = Modifier.height(12.dp))
                         }
                     }
                 }
             }
 
-            else -> {
-                item {
-                    Log.d("HomeScreen", "Displaying group list")
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Text("HomeScreen", color = Color(0xFFFFD54F), fontWeight = FontWeight.Bold)
-                    }
-                    Spacer(modifier = Modifier.height(50.dp))
+            // Fixed bottom buttons
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Button(
+                    onClick = { showCreateDialog = true },
+                    colors = ButtonDefaults.buttonColors(backgroundColor = Color(0xFF888888)),
+                    shape = RoundedCornerShape(50),
+                    modifier = Modifier.fillMaxWidth(0.9f)
+                ) {
+                    Text("+ Crear grupo", color = Color.White, fontSize = 18.sp)
                 }
-                groups.forEach { group ->
-                    item {
-                        Log.d("HomeScreen", "Rendering group item: ${group.groupName}")
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 8.dp)
-                                .background(Color(0xFF444444), RoundedCornerShape(12.dp))
-                                .padding(16.dp)
-                                .clickable {
-                                    Log.d("HomeScreen", "Group clicked: ${group.groupName}, navigating to group screen")
-                                    groupViewModel.setGroupId(group.groupID)
-                                    navController.navigate(Screen.Group.createRoute(group.groupID))
-                                }
-                        ) {
-                            Text(
-                                text = "Grupo: ${group.groupName}",
-                                color = Color.White,
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(10.dp))
-                    }
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = { showJoinDialog = true },
+                    shape = RoundedCornerShape(50),
+                    border = BorderStroke(1.dp, Color.White),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                    modifier = Modifier.fillMaxWidth(0.9f)
+                ) {
+                    Text("Unirse a un grupo", fontSize = 16.sp, color = Color.Black)
                 }
-                item {
-                    Log.d("HomeScreen", "Showing create/join group options")
-                    Spacer(modifier = Modifier.height(100.dp))
-                    Button(
-                        onClick = { showCreateDialog = true },
-                        colors = ButtonDefaults.buttonColors(backgroundColor = Color(0xFF888888)),
-                        shape = RoundedCornerShape(50),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("+ Crear grupo", color = Color.White, fontSize = 18.sp)
-                    }
-                    OutlinedButton(
-                        onClick = { showJoinDialog = true },
-                        shape = RoundedCornerShape(50),
-                        border = BorderStroke(1.dp, Color.White),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Unirse a un grupo", fontSize = 16.sp, color= Color.Black)
-                    }
-                    Spacer(modifier = Modifier.height(100.dp))
-                }
-
-                item {
-                    Log.d("HomeScreen", "Showing invite friends section")
-                    Spacer(modifier = Modifier.height(20.dp))
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(Color(0xFF333333), RoundedCornerShape(12.dp))
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.ShoppingCart,
-                            contentDescription = "friends",
-                            tint = Color(0xFFFFD54F)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Invita a 5 amigos para no tener anuncios", color = Color.White)
-                    }
-                }
+                Spacer(modifier= Modifier.height(100.dp))
             }
         }
     }
 
     if (showCreateDialog) {
-        Log.d("HomeScreen", "Displaying create group dialog")
-        ShowCreateGroupDialog(
-            onDismiss = { showCreateDialog = false },
-            navController = navController
-        )
+        ShowCreateGroupDialog(onDismiss = { showCreateDialog = false }, navController = navController)
     }
 
     if (showJoinDialog) {
-        Log.d("HomeScreen", "Displaying join group dialog")
-        ShowJoinGroupDialog(
-            userId = userID,
-            navController = navController,
-            onDismiss = { showJoinDialog = false }
-        )
+        ShowJoinGroupDialog(userId = userID, navController = navController, onDismiss = { showJoinDialog = false })
     }
 }
 
@@ -395,10 +352,15 @@ fun ShowJoinGroupDialog(
 }
 
 @Composable
-fun YourNameJoin(navController: NavController, groupID: String, auth: FirebaseAuth, groupViewModel: GroupViewModel) {
+fun YourNameJoin(
+    navController: NavController,
+    groupID: String,
+    auth: FirebaseAuth,
+    groupViewModel: GroupViewModel
+) {
     val context = LocalContext.current
     val userID = auth.currentUser?.uid ?: return
-    var userName by remember { mutableStateOf("") }
+    var userName by remember { mutableStateOf("Nombre") }
     val db = FirebaseFirestore.getInstance()
 
     Column(
@@ -437,33 +399,46 @@ fun YourNameJoin(navController: NavController, groupID: String, auth: FirebaseAu
 
         Button(
             onClick = {
-                val groupRef = db.collection("groups").document(groupID)
 
-                // Crear los datos como mapa plano
-                val memberDataMap = mapOf(
-                    "name" to userName,
-                    "phase" to 1,
-                    "challengesCompleted" to emptyMap<String, Boolean>(),
-                    "phaseStartDate" to Timestamp.now(),
-                    "etapa" to "Previa"
-                )
 
-                groupRef.update("members.$userID", memberDataMap).addOnSuccessListener {
-                    val userGroupRef = db.collection("users").document(userID)
-                        .collection("groups").document(groupID)
+                // Ejecutar código asíncrono dentro de CoroutineScope
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        val groupRef = db.collection("groups").document(groupID)
+                        val groupDoc = groupRef.get().await()
+                        val membersMap = groupDoc.get("members") as? Map<String, Map<String, Any>> ?: emptyMap()
 
-                    userGroupRef.set(hashMapOf("groupId" to groupID)).addOnSuccessListener {
-                        groupViewModel.setGroupId(groupID)
-                        navController.navigate(Screen.Group.createRoute(groupID))
-                    }.addOnFailureListener {
-                        Toast.makeText(
-                            context,
-                            "Error al guardar en el usuario",
-                            Toast.LENGTH_SHORT
-                        ).show()
+                        val anyPrevia = membersMap.values.any { it["etapa"] == "Previa" }
+
+                        val etapaValue = if (anyPrevia) "Previa" else "Intro"
+
+                        val memberDataMap = mapOf(
+                            "name" to userName,
+                            "phase" to 1,
+                            "challengesCompleted" to emptyMap<String, Boolean>(),
+                            "phaseStartDate" to Timestamp.now(),
+                            "etapa" to etapaValue
+                        )
+
+                        groupRef.update("members.$userID", memberDataMap).await()
+
+                        val userGroupRef = db.collection("users")
+                            .document(userID)
+                            .collection("groups")
+                            .document(groupID)
+
+                        userGroupRef.set(mapOf("groupId" to groupID)).await()
+
+                        withContext(Dispatchers.Main) {
+                            groupViewModel.setGroupId(groupID)
+                            navController.navigate(Screen.Group.createRoute(groupID))
+                        }
+
+                    } catch (e: Exception) {
+                        withContext(Dispatchers.Main) {
+                            Toast.makeText(context, "Error al unirse al grupo", Toast.LENGTH_SHORT).show()
+                        }
                     }
-                }.addOnFailureListener {
-                    Toast.makeText(context, "Error al unirse al grupo", Toast.LENGTH_SHORT).show()
                 }
             },
             colors = ButtonDefaults.buttonColors(backgroundColor = Color(0xFF888888)),
@@ -472,7 +447,6 @@ fun YourNameJoin(navController: NavController, groupID: String, auth: FirebaseAu
         ) {
             Text("¡Únete!", color = Color.White, fontSize = 18.sp)
         }
-
     }
 }
 
