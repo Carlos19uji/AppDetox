@@ -22,7 +22,12 @@ import androidx.navigation.compose.rememberNavController
 import com.example.detoxapp.ui.theme.DetoxAppTheme
 import com.google.accompanist.insets.ProvideWindowInsets
 import com.google.android.gms.ads.MobileAds
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInClient
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.api.ApiException
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.GoogleAuthProvider
 import io.branch.referral.Branch
 import io.branch.referral.validators.IntegrationValidator
 import kotlinx.coroutines.launch
@@ -33,6 +38,8 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var navController: NavController
     private lateinit var auth: FirebaseAuth
+    private lateinit var googleSignInClient: GoogleSignInClient
+    private val RC_SIGN_IN = 9001
     private val pendingGroupId = mutableStateOf<String?>(null)  // Estado observable
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -43,6 +50,12 @@ class MainActivity : ComponentActivity() {
         Branch.getAutoInstance(this)
         // ✅ Inicializa Firebase
         auth = FirebaseAuth.getInstance()
+        val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+            .requestIdToken(getString(R.string.app_name)) // Asegúrate de tener esto en strings.xml
+            .requestEmail()
+            .build()
+        googleSignInClient = GoogleSignIn.getClient(this, gso)
+
 
         // ✅ Inicializa AdMob
         MobileAds.initialize(this)
@@ -58,6 +71,38 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    private fun signInWithGoogle() {
+        val signInIntent = googleSignInClient.signInIntent
+        startActivityForResult(signInIntent, RC_SIGN_IN)
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+
+        if (requestCode == RC_SIGN_IN) {
+            val task = GoogleSignIn.getSignedInAccountFromIntent(data)
+            try {
+                val account = task.getResult(ApiException::class.java)
+                firebaseAuthWithGoogle(account.idToken!!)
+            } catch (e: ApiException) {
+                Log.w("GoogleSignIn", "Google sign in failed", e)
+            }
+        }
+    }
+
+    private fun firebaseAuthWithGoogle(idToken: String) {
+        val credential = GoogleAuthProvider.getCredential(idToken, null)
+        auth.signInWithCredential(credential)
+            .addOnCompleteListener(this) { task ->
+                if (task.isSuccessful) {
+                    val user = auth.currentUser
+                    Log.d("FirebaseAuth", "signInWithCredential:success - ${user?.email}")
+                } else {
+                    Log.w("FirebaseAuth", "signInWithCredential:failure", task.exception)
+                }
+            }
     }
 
     override fun onStart() {
