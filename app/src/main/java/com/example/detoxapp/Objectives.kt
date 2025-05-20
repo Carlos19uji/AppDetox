@@ -1,5 +1,6 @@
 package com.example.detoxapp
 
+import android.app.Activity
 import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.background
@@ -75,10 +76,13 @@ import kotlin.math.roundToInt
 
 
 @Composable
-fun Objectives(navController: NavController, groupViewModel: GroupViewModel, auth: FirebaseAuth) {
+fun Objectives(
+    navController: NavController,
+    groupViewModel: GroupViewModel,
+    auth: FirebaseAuth,
+    adViewModel: AdViewModel) {
     val userId = auth.currentUser?.uid ?: return
     val groupId = groupViewModel.groupId.value ?: return
-    val coroutineScope = rememberCoroutineScope()
 
     val phase = remember { mutableStateOf(1) }
     val challengeCheckList = remember { mutableStateMapOf<Int, Boolean>() }
@@ -298,7 +302,8 @@ fun Objectives(navController: NavController, groupViewModel: GroupViewModel, aut
                     onDismiss = { showDialog.value = false },
                     auth = auth,
                     groupViewModel = groupViewModel,
-                    navController = navController
+                    navController = navController,
+                    adViewModel = adViewModel
                 )
             }
         }
@@ -392,8 +397,10 @@ fun showChallengeDialog(
     onDismiss: () -> Unit,
     auth: FirebaseAuth,
     groupViewModel: GroupViewModel,
-    navController: NavController
+    navController: NavController,
+    adViewModel: AdViewModel
 ) {
+    val context = LocalContext.current
     val userId = auth.currentUser?.uid ?: return
     val db = FirebaseFirestore.getInstance()
     val coroutineScope = rememberCoroutineScope()
@@ -446,8 +453,14 @@ fun showChallengeDialog(
                                 .set(message)
                                 .await()
 
+                            adViewModel.messageSaveInterstitialAd?.let { ad ->
+                                ad.show(context as Activity)
+                                adViewModel.clearMessageSaveAd()
+                                adViewModel.loadMessageSaveAd()
+                            }
+
                             onDismiss()
-                            navController.navigate(Screen.Objectives.route)
+                            navController.navigate(Screen.Messages.route)
                         }
                     }) {
                         Text("Guardar", color = Color.White)

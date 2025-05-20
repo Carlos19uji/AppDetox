@@ -76,6 +76,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
+
 @Composable
 fun Ranking(
     auth: FirebaseAuth,
@@ -165,6 +166,7 @@ fun Ranking(
                                 .clip(CircleShape)
                                 .background(Color.Gray)
                         )
+
 
                         Spacer(modifier = Modifier.width(12.dp))
 

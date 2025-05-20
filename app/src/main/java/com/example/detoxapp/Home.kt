@@ -66,7 +66,10 @@ import kotlinx.coroutines.withContext
 import com.google.android.gms.ads.AdRequest
 
 @Composable
-fun HomeScreen(navController: NavController, auth: FirebaseAuth, groupViewModel: GroupViewModel = viewModel()) {
+fun HomeScreen(navController: NavController,
+               auth: FirebaseAuth,
+               groupViewModel: GroupViewModel = viewModel(),
+               adViewModel: AdViewModel) {
     val db = FirebaseFirestore.getInstance()
     val userID = auth.currentUser?.uid ?: return
 
@@ -213,23 +216,13 @@ fun HomeScreen(navController: NavController, auth: FirebaseAuth, groupViewModel:
                                         .clickable {
                                             groupViewModel.setGroupId(group.groupID)
 
-                                            interstitialAd?.fullScreenContentCallback =
-                                                object : FullScreenContentCallback() {
-                                                    override fun onAdDismissedFullScreenContent() {
-                                                        interstitialAd = null
-                                                        navController.navigate(Screen.Group.createRoute(group.groupID))
-                                                    }
-
-                                                    override fun onAdFailedToShowFullScreenContent(adError: AdError) {
-                                                        navController.navigate(Screen.Group.createRoute(group.groupID))
-                                                    }
-                                                }
-
-                                            if (interstitialAd != null && activity != null) {
-                                                interstitialAd?.show(activity)
-                                            } else {
-                                                navController.navigate(Screen.Group.createRoute(group.groupID))
+                                            adViewModel.homeInterstitialAd?.let { ad ->
+                                                ad.show(context as Activity)
+                                                adViewModel.clearHomeAd()
+                                                adViewModel.loadHomeAd()
                                             }
+
+                                            navController.navigate(Screen.Group.createRoute(group.groupID))
                                         }
                                         .padding(16.dp)
                                 ) {
@@ -356,7 +349,8 @@ fun YourNameJoin(
     navController: NavController,
     groupID: String,
     auth: FirebaseAuth,
-    groupViewModel: GroupViewModel
+    groupViewModel: GroupViewModel,
+    adViewModel: AdViewModel
 ) {
     val context = LocalContext.current
     val userID = auth.currentUser?.uid ?: return
@@ -400,8 +394,6 @@ fun YourNameJoin(
         Button(
             onClick = {
 
-
-                // Ejecutar código asíncrono dentro de CoroutineScope
                 CoroutineScope(Dispatchers.IO).launch {
                     try {
                         val groupRef = db.collection("groups").document(groupID)
@@ -428,6 +420,12 @@ fun YourNameJoin(
                             .document(groupID)
 
                         userGroupRef.set(mapOf("groupId" to groupID)).await()
+
+                        adViewModel.joinOrCreateGroupInterstitialAd?.let { ad ->
+                            ad.show(context as Activity)
+                            adViewModel.clearCreateOrJoinAd()
+                            adViewModel.loadCreateOrJoinGroupAd()
+                        }
 
                         withContext(Dispatchers.Main) {
                             groupViewModel.setGroupId(groupID)
@@ -540,7 +538,11 @@ fun CreateGroupScreen(navController: NavController, auth: FirebaseAuth) {
 }
 
 @Composable
-fun YourName(navController: NavController, groupName: String, auth: FirebaseAuth, groupViewModel: GroupViewModel) {
+fun YourName(
+    navController: NavController,
+    groupName: String, auth: FirebaseAuth,
+    groupViewModel: GroupViewModel,
+    adViewModel: AdViewModel) {
     val context = LocalContext.current
     val userID = auth.currentUser?.uid ?: return
     var userName by remember { mutableStateOf("Nombre") }
@@ -605,6 +607,13 @@ fun YourName(navController: NavController, groupName: String, auth: FirebaseAuth
                         .collection("groups").document(groupID)
 
                     userGroupRef.set(hashMapOf("groupId" to groupID)).addOnSuccessListener {
+
+                        adViewModel.joinOrCreateGroupInterstitialAd?.let { ad ->
+                            ad.show(context as Activity)
+                            adViewModel.clearCreateOrJoinAd()
+                            adViewModel.loadCreateOrJoinGroupAd()
+                        }
+
                         groupViewModel.setGroupId(groupID)
                         navController.navigate(Screen.Group.createRoute(groupRef.id))
                     }.addOnFailureListener {

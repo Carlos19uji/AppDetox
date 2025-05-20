@@ -1,10 +1,15 @@
 package com.example.detoxapp
 
+import android.content.pm.PackageManager
+import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.Drawable
 import android.os.Build
 import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.LinearProgressIndicator
 import androidx.compose.material3.ButtonDefaults
@@ -30,14 +36,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.graphics.drawable.toBitmap
 import androidx.navigation.NavController
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.text.SimpleDateFormat
@@ -47,6 +57,7 @@ import java.time.temporal.ChronoUnit
 import java.util.Calendar
 import java.util.Locale
 import kotlin.math.pow
+
 
 @RequiresApi(Build.VERSION_CODES.LOLLIPOP)
 @Composable
@@ -64,24 +75,24 @@ fun GroupMainScreen(
     val userName = remember { mutableStateOf("Usuario") }
     val currentDay = remember { mutableStateOf(1) }
     val totalDays = remember { mutableStateOf(7) }
+    val etapa = remember { mutableStateOf("") }
 
     var isPhaseValid by remember { mutableStateOf(false) }
     val (reductionConfig, setReductionConfig) = remember { mutableStateOf<ReductionConfig?>(null) }
     val (initialUsage, setInitialUsage) = remember { mutableStateOf<Long?>(null) }
     val (averageUsage, setAverageUsage) = remember { mutableStateOf<Long?>(null) }
 
-    var topApps by remember { mutableStateOf<List<Pair<String, Long>>>(emptyList()) }
+    var topAppDetails by remember { mutableStateOf<List<Pair<String, Long>>>(emptyList()) }
 
     LaunchedEffect(Unit) {
         try {
-            // Fetch phase number, user name and reduction config
+
             phase.value = fetchUserPhase(groupId, userID)
             userName.value = fetchUserName(groupId, userID)
             setReductionConfig(fetchGroupReductionConfig(groupId))
             setInitialUsage(fetchPhaseAverageUsage(userID, 1, groupId))
             setAverageUsage(fetchPhaseAverageUsage(userID, phase.value, groupId))
 
-            // Fetch phase document to get date info
             val phaseDocRef = db.collection("users").document(userID)
                 .collection("groups").document(groupId)
                 .collection("phases")
@@ -108,7 +119,6 @@ fun GroupMainScreen(
                     if (today >= fechaFin) {
                         val memberField = "members.$userID.etapa"
                         db.collection("groups").document(groupId).update(memberField, "End")
-
                         navController.navigate(Screen.PhaseEndScreen.route) {
                             popUpTo(navController.graph.startDestinationId)
                             launchSingleTop = true
@@ -123,7 +133,21 @@ fun GroupMainScreen(
                 isPhaseValid = true
             }
 
-            // --- Aquí empieza la lectura del uso por app desde Firebase ---
+            val groupDoc = db.collection("groups").document(groupId).get().await()
+            val membersMap = groupDoc.get("members") as? Map<*, *>
+            val userStageMap = membersMap?.get(userID) as? Map<*, *>
+            val userStage = userStageMap?.get("etapa") as? String
+
+            etapa.value = userStage ?: ""
+
+            // Navegar si la etapa es "Previa"
+            if (etapa.value == "Previa") {
+                navController.navigate(Screen.Previa.route) {
+                    popUpTo(navController.graph.startDestinationId) { inclusive = true }
+                    launchSingleTop = true
+                }
+                return@LaunchedEffect
+            }
 
             val formatterPhase = DateTimeFormatter.ofPattern("dd-MM-yyyy")
             val formatterFirestore = DateTimeFormatter.ofPattern("yyyy-MM-dd")
@@ -152,20 +176,21 @@ fun GroupMainScreen(
                     if (usageDoc.exists()) {
                         val dayData = usageDoc.data ?: emptyMap<String, Any>()
 
-                        dayData.forEach { (appName, usage) ->
+                        dayData.forEach { (packageName, usage) ->
                             val usageLong = (usage as? Number)?.toLong() ?: 0L
-                            appsUsageMap[appName] = (appsUsageMap[appName] ?: 0L) + usageLong
+                            appsUsageMap[packageName] = (appsUsageMap[packageName] ?: 0L) + usageLong
                         }
                     }
                 }
 
-                // Ordena las apps por tiempo de uso descendente y toma las 3 primeras
-                topApps = appsUsageMap.toList()
+                val top = appsUsageMap.toList()
                     .sortedByDescending { it.second }
                     .take(3)
+
+                topAppDetails = top
             }
         } catch (e: Exception) {
-            Log.e("GroupMainScreen", "Error al obtener datos: ${e.message}")
+            Log.e("GroupMainScreen", "Error: ${e.message}")
             isPhaseValid = true
         }
     }
@@ -192,30 +217,13 @@ fun GroupMainScreen(
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-
-            Text(
-                text = "Hola, ${userName.value}",
-                color = Color.White,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold
-            )
+            Text("Hola, ${userName.value}", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(16.dp))
-
-            Text(
-                text = "Estás en la fase ${phase.value}",
-                color = Color.White,
-                fontSize = 18.sp
-            )
-
-            Text(
-                text = "${currentDay.value}/${totalDays.value} días en esta fase",
-                color = Color(0xFFCCCCCC),
-                fontSize = 16.sp
-            )
+            Text("Estás en la fase ${phase.value}", color = Color.White, fontSize = 18.sp)
+            Text("${currentDay.value}/${totalDays.value} días en esta fase", color = Color.Gray, fontSize = 16.sp)
             Spacer(modifier = Modifier.height(8.dp))
-
             LinearProgressIndicator(
-                progress = currentDay.value.toFloat() / totalDays.value.toFloat().coerceAtLeast(1f),
+                progress = currentDay.value.toFloat() / totalDays.value.coerceAtLeast(1).toFloat(),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(8.dp)
@@ -223,7 +231,6 @@ fun GroupMainScreen(
                 color = Color(0xFF8E24AA),
                 backgroundColor = Color.DarkGray
             )
-
             Spacer(modifier = Modifier.height(32.dp))
 
             val usageColor = if ((averageUsage ?: 0L) <= ((targetUsageMinutes ?: 0) * 60 * 1000L)) {
@@ -232,49 +239,25 @@ fun GroupMainScreen(
                 Color(0xFFFF6B6B)
             }
 
-            Text(
-                text = "Uso medio diario: ${formatDuration(averageUsage ?: 0L)}",
-                color = usageColor,
-                fontSize = 16.sp
-            )
-
+            Text("Uso medio diario: ${formatDuration(averageUsage ?: 0L)}", color = usageColor, fontSize = 16.sp)
             Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                text = "Objetivo diario: ${formatDuration((targetUsageMinutes ?: 0) * 60 * 1000L)}",
-                color = Color(0xFFFFD54F),
-                fontSize = 16.sp
-            )
-
+            Text("Objetivo diario: ${formatDuration((targetUsageMinutes ?: 0) * 60 * 1000L)}", color = Color(0xFFFFD54F), fontSize = 16.sp)
             Spacer(modifier = Modifier.height(64.dp))
 
-            if (topApps.isNotEmpty()) {
-
+            if (topAppDetails.isNotEmpty()) {
                 Text(
-                    text = "Top 3 apps que más has usado desde que empezó esta fase:",
+                    "Top 3 apps que más has usado desde que empezó esta fase:",
                     color = Color.White,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center
                 )
-
                 Spacer(modifier = Modifier.height(16.dp))
 
-                topApps.forEach { (appName, usageTime) ->
-                    val hours = (usageTime / (1000 * 60 * 60)).toInt()
-                    val minutes = ((usageTime / (1000 * 60)) % 60).toInt()
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 6.dp)
-                            .background(Color(0xFF222222), RoundedCornerShape(12.dp))
-                            .padding(16.dp)
-                    ) {
-                        Column {
-                            Text(text = appName, color = Color.White, fontSize = 16.sp)
-                            Text(text = "${hours}h ${minutes}min", color = Color.Gray, fontSize = 14.sp)
-                        }
-                    }
+                topAppDetails.map { (packageName, usageTime) ->
+                    AppUsage(appName = packageName, usageTime = usageTime)
+                }.forEach { appUsage ->
+                    AppUsageRow(app = appUsage, context = context)
                 }
             }
         }

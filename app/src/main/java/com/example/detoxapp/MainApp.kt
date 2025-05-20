@@ -1,5 +1,6 @@
 package com.example.detoxapp
 
+import android.app.Application
 import android.content.Context
 import android.util.Log
 import androidx.compose.foundation.layout.WindowInsets
@@ -30,6 +31,8 @@ import com.example.detoxapp.ui.theme.LoginScreen
 import com.example.detoxapp.ui.theme.PasswordRecovery
 import com.google.firebase.auth.FirebaseAuth
 import androidx.compose.runtime.State
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.firebase.Timestamp
@@ -69,6 +72,9 @@ class LinkViewModel : ViewModel() {
 fun MainApp(auth: FirebaseAuth, pendingGroupId: String? = null) {
     val navController = rememberNavController()
     val groupViewModel = remember { GroupViewModel() }
+    val adViewModel: AdViewModel = viewModel(
+        factory = ViewModelProvider.AndroidViewModelFactory(LocalContext.current.applicationContext as Application)
+    )
 
     //Navegar a unirse al grupo si hay pendingGroupId y el usuario esta logueado
 
@@ -170,7 +176,7 @@ fun MainApp(auth: FirebaseAuth, pendingGroupId: String? = null) {
                 PasswordRecovery(auth, navController)
             }
             composable(Screen.Home.route){
-                HomeScreen(navController, auth, groupViewModel)
+                HomeScreen(navController, auth, groupViewModel, adViewModel)
             }
             composable(Screen.NameGroup.route){
                 CreateGroupScreen(navController, auth)
@@ -181,7 +187,7 @@ fun MainApp(auth: FirebaseAuth, pendingGroupId: String? = null) {
             ){ backStackEntry ->
                 val groupName = backStackEntry.arguments?.getString("groupName")
                 if (groupName != null) {
-                    YourName(navController, groupName, auth, groupViewModel)
+                    YourName(navController, groupName, auth, groupViewModel, adViewModel)
                 }
             }
             composable(
@@ -192,7 +198,7 @@ fun MainApp(auth: FirebaseAuth, pendingGroupId: String? = null) {
                 val groupId = passedGroupId ?: groupViewModel.groupId.value
 
                 if (groupId != null){
-                    YourNameJoin(navController, groupId, auth, groupViewModel)
+                    YourNameJoin(navController, groupId, auth, groupViewModel, adViewModel)
                 }
 
             }
@@ -214,7 +220,7 @@ fun MainApp(auth: FirebaseAuth, pendingGroupId: String? = null) {
 
             }
             composable(Screen.Objectives.route){
-                Objectives(navController, groupViewModel, auth)
+                Objectives(navController, groupViewModel, auth, adViewModel)
             }
             composable(Screen.PhaseIntroScreen.route) {
                 PhaseIntroScreen(navController, groupViewModel, auth)
@@ -229,7 +235,7 @@ fun MainApp(auth: FirebaseAuth, pendingGroupId: String? = null) {
                 Messages(navController, groupViewModel, auth)
             }
             composable(Screen.EditProfile.route) {
-                EditProfile(navController, groupViewModel, auth)
+                EditProfile(navController, groupViewModel, auth, adViewModel)
             }
         }
     }
