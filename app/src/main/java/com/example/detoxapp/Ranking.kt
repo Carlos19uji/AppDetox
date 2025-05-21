@@ -24,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
@@ -211,9 +212,10 @@ fun Ranking(
                         onClick = {
                             Log.d("Ranking", "Botón Invitar amigos pulsado")
                             showInviteDialog = true
-                        }
+                        },
+                        colors = ButtonDefaults.buttonColors(Color(0xFF5A4F8D))
                     ) {
-                        Text("Invitar amigos")
+                        Text("Invitar amigos", color = Color.White, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -226,8 +228,7 @@ fun Ranking(
                     Log.d("Ranking", "InviteDialog cerrado")
                     showInviteDialog = false
                 },
-                groupId = groupId,
-                inviteLink = inviteLink
+                groupId = groupId
             )
         }
     }
@@ -294,8 +295,7 @@ suspend fun generateDynamicInviteLink(
 @Composable
 fun InviteDialog(
     onDismiss: () -> Unit,
-    groupId: String,
-    inviteLink: String
+    groupId: String
 ) {
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
@@ -326,7 +326,7 @@ fun InviteDialog(
 
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        text = "Comparte este enlace o el ID del grupo para que tus amigos se unan.",
+                        text = "Comparte el ID del grupo para que tus amigos se unan.",
                         color = Color.LightGray,
                         textAlign = TextAlign.Center,
                         fontSize = 14.sp
@@ -339,16 +339,6 @@ fun InviteDialog(
                         onCopy = {
                             clipboardManager.setText(AnnotatedString(groupId))
                             Toast.makeText(context, "ID copiado", Toast.LENGTH_SHORT).show()
-                        }
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-                    InviteField(
-                        label = "Enlace de invitación",
-                        value = inviteLink,
-                        onCopy = {
-                            clipboardManager.setText(AnnotatedString(inviteLink))
-                            Toast.makeText(context, "Enlace copiado", Toast.LENGTH_SHORT).show()
                         }
                     )
                 }

@@ -59,7 +59,7 @@ class AdViewModel(application: Application) : AndroidViewModel(application) {
     fun loadCreateOrJoinGroupAd(){
         InterstitialAd.load(
             context,
-            "ca-app-pub-3940256099942544/1033173712",
+            "ca-app-pub-7055736346592282/6573357608",
             adRequest,
             object : InterstitialAdLoadCallback(){
                 override fun onAdLoaded(ad: InterstitialAd){

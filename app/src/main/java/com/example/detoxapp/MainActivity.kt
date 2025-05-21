@@ -7,14 +7,35 @@ import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavController
@@ -48,10 +69,11 @@ class MainActivity : ComponentActivity() {
         // ✅ Inicializa Branch SDK en onCreate (pero NO uses .init aquí)
         Branch.enableLogging()
         Branch.getAutoInstance(this)
+
         // ✅ Inicializa Firebase
         auth = FirebaseAuth.getInstance()
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestIdToken(getString(R.string.app_name)) // Asegúrate de tener esto en strings.xml
+            .requestIdToken(getString(R.string.default_web_client_id))
             .requestEmail()
             .build()
         googleSignInClient = GoogleSignIn.getClient(this, gso)
@@ -67,7 +89,7 @@ class MainActivity : ComponentActivity() {
             DetoxAppTheme {
                 ProvideWindowInsets {
                     navController = rememberNavController()
-                    MainApp(auth, pendingGroupId = pendingGroupId.value)
+                    MainApp(auth, pendingGroupId = pendingGroupId.value, onGoogleSignIn = {signInWithGoogle()})
                 }
             }
         }
@@ -200,4 +222,46 @@ sealed class Screen(val route: String){
     object Previa: Screen("previa")
     object Messages: Screen("messages")
     object EditProfile: Screen("edit_profile")
+}
+
+@Composable
+fun GoogleSignInButton(text: String, onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = Color.White,
+            contentColor = Color.Black
+        ),
+        shape = RoundedCornerShape(50),
+        modifier = Modifier
+            .fillMaxWidth(0.8f)
+            .padding(vertical = 8.dp)
+            .height(42.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize(),          // usa todo el espacio del botón
+            contentAlignment = Alignment.Center
+        ) {
+            // ① Texto siempre en una sola línea, centrado
+            Text(
+                text = text,
+                fontSize = 16.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.align(Alignment.Center)
+            )
+
+            // ② Icono a la izquierda dentro del mismo Box
+            Image(
+                painter = painterResource(id = R.drawable.logogoogle),
+                contentDescription = "Google Logo",
+                modifier = Modifier
+                    .size(30.dp)
+                    .align(Alignment.CenterStart)  // alineado al inicio del Box
+                    .padding(start = 4.dp)
+            )
+        }
+    }
 }

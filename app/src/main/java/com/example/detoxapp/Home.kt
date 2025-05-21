@@ -74,26 +74,16 @@ fun HomeScreen(navController: NavController,
     val userID = auth.currentUser?.uid ?: return
 
     val context = LocalContext.current
-    val activity = context as? Activity
-
-    var interstitialAd by remember { mutableStateOf<InterstitialAd?>(null) }
-    val adRequest = remember { AdRequest.Builder().build() }
 
     LaunchedEffect(Unit) {
-        InterstitialAd.load(
-            context,
-            "ca-app-pub-7055736346592282/7121992255", // ← Reemplaza con tu ID de bloque
-            adRequest,
-            object : InterstitialAdLoadCallback() {
-                override fun onAdLoaded(ad: InterstitialAd) {
-                    interstitialAd = ad
-                }
-
-                override fun onAdFailedToLoad(adError: LoadAdError) {
-                    interstitialAd = null
-                }
-            }
-        )
+        if (!isUsageStatsPermissionGranted(context)) {
+            Toast.makeText(
+                context,
+                "Otorga permiso de acceso a uso para ver las estadísticas.",
+                Toast.LENGTH_LONG
+            ).show()
+            requestUsageStatsPermission(context)
+        }
     }
 
     var loadingState by remember { mutableStateOf(true) }

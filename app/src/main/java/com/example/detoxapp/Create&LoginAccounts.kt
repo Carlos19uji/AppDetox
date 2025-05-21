@@ -37,6 +37,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.example.detoxapp.GoogleSignInButton
 import com.example.detoxapp.Screen
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -89,7 +90,8 @@ fun LoginScreen(
     auth: FirebaseAuth,
     navController: NavController,
     onCreateAccountClick: () -> Unit,
-    onForgotPasswordClick: () -> Unit
+    onForgotPasswordClick: () -> Unit,
+    onGoogleSignIn: () -> Unit
 ){
     val emailState = remember { mutableStateOf("") }
     val passwordState = remember { mutableStateOf("") }
@@ -108,6 +110,7 @@ fun LoginScreen(
         password(passwordState)
 
         Spacer(modifier = Modifier.height(30.dp))
+
         Button(
             onClick = {
                 if (emailState.value.isNotEmpty() && passwordState.value.isNotEmpty()){
@@ -140,6 +143,10 @@ fun LoginScreen(
             Text(text = "Log In", color = Color.White, fontSize = 18.sp)
         }
 
+        Spacer(modifier = Modifier.height(30.dp))
+
+        GoogleSignInButton("Log in with Google", onGoogleSignIn)
+
         Spacer(modifier = Modifier.height(60.dp))
 
         Text(
@@ -167,7 +174,8 @@ fun LoginScreen(
 fun CreateAccount(
     onLoginClick: () -> Unit,
     navController: NavController,
-    auth: FirebaseAuth
+    auth: FirebaseAuth,
+    onGoogleSignIn: () -> Unit
 ) {
     var emailState = remember { mutableStateOf("") }
     var passwordState = remember { mutableStateOf("") }
@@ -184,7 +192,7 @@ fun CreateAccount(
         email(emailState)
         password(passwordState)
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(30.dp))
         Button(
             onClick = {
                 if (emailState.value.isNotEmpty() && passwordState.value.isNotEmpty()) {
@@ -230,6 +238,11 @@ fun CreateAccount(
         ) {
             Text(text = "Create Account", color = Color.White, fontSize = 18.sp)
         }
+
+        Spacer(modifier = Modifier.height(30.dp))
+
+        GoogleSignInButton("Sing in with Google", onGoogleSignIn)
+
         Spacer(modifier = Modifier.height(60.dp))
 
         Text(

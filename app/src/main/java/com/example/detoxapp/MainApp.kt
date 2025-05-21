@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.material.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -36,6 +37,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.firebase.Timestamp
+import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.launch
 
@@ -69,12 +71,38 @@ class LinkViewModel : ViewModel() {
 }
 
 @Composable
-fun MainApp(auth: FirebaseAuth, pendingGroupId: String? = null) {
+fun MainApp(
+    auth: FirebaseAuth,
+    pendingGroupId: String? = null,
+    onGoogleSignIn: () -> Unit) {
+
     val navController = rememberNavController()
     val groupViewModel = remember { GroupViewModel() }
     val adViewModel: AdViewModel = viewModel(
         factory = ViewModelProvider.AndroidViewModelFactory(LocalContext.current.applicationContext as Application)
     )
+
+    val firebaseUserState = remember { mutableStateOf<FirebaseUser?>(auth.currentUser) }
+
+    // 2️⃣ Registramos un AuthStateListener para actualizar ese estado
+    DisposableEffect(auth) {
+        val listener = FirebaseAuth.AuthStateListener { firebaseAuth ->
+            firebaseUserState.value = firebaseAuth.currentUser
+        }
+        auth.addAuthStateListener(listener)
+        onDispose {
+            auth.removeAuthStateListener(listener)
+        }
+    }
+
+    // 3️⃣ Ahora sí, navegamos en cuanto firebaseUserState cambie a no-null
+    LaunchedEffect(firebaseUserState.value) {
+        if (firebaseUserState.value != null) {
+            navController.navigate(Screen.Home.route) {
+                popUpTo(Screen.Login.route) { inclusive = true }
+            }
+        }
+    }
 
     //Navegar a unirse al grupo si hay pendingGroupId y el usuario esta logueado
 
@@ -162,14 +190,16 @@ fun MainApp(auth: FirebaseAuth, pendingGroupId: String? = null) {
                     auth,
                     navController,
                     onCreateAccountClick = {navController.navigate(Screen.CreateAccount.route)},
-                    onForgotPasswordClick = {navController.navigate(Screen.Password.route)}
+                    onForgotPasswordClick = {navController.navigate(Screen.Password.route)},
+                    onGoogleSignIn
                 )
             }
             composable(Screen.CreateAccount.route){
                 CreateAccount(
                     onLoginClick = {navController.navigate(Screen.Login.route)},
                     navController,
-                    auth
+                    auth,
+                    onGoogleSignIn
                 )
             }
             composable(Screen.Password.route){

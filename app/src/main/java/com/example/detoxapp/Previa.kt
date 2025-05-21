@@ -1,5 +1,6 @@
 package com.example.detoxapp
 
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -49,9 +50,11 @@ import kotlin.math.pow
 
 @Composable
 fun Previa(navController: NavController, groupViewModel: GroupViewModel, auth: FirebaseAuth) {
+
     val context = LocalContext.current
     val groupId = groupViewModel.groupId.value ?: return
     val currentUserId = auth.currentUser?.uid ?: return
+    var showInviteDialog by remember { mutableStateOf(false) }
 
     val showDialog = remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
@@ -115,6 +118,19 @@ fun Previa(navController: NavController, groupViewModel: GroupViewModel, auth: F
                     )
                 }
             }
+            item {
+                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    Button(
+                        onClick = {
+                            Log.d("Ranking", "Botón Invitar amigos pulsado")
+                            showInviteDialog = true
+                        },
+                        colors = ButtonDefaults.buttonColors(Color(0xFF5A4F8D))
+                    ) {
+                        Text("Invitar amigos", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
 
             item {
                 Spacer(modifier = Modifier.height(8.dp))
@@ -131,6 +147,15 @@ fun Previa(navController: NavController, groupViewModel: GroupViewModel, auth: F
             }
         }
 
+    }
+    if (showInviteDialog) {
+        InviteDialog(
+            onDismiss = {
+                Log.d("Ranking", "InviteDialog cerrado")
+                showInviteDialog = false
+            },
+            groupId = groupId
+        )
     }
     if (showDialog.value == true){
         AlertDialog(
