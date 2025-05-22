@@ -40,6 +40,11 @@ import androidx.core.view.WindowCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
+import androidx.work.Constraints
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
 import com.example.detoxapp.ui.theme.DetoxAppTheme
 import com.google.accompanist.insets.ProvideWindowInsets
 import com.google.android.gms.ads.MobileAds
@@ -53,6 +58,9 @@ import io.branch.referral.Branch
 import io.branch.referral.validators.IntegrationValidator
 import kotlinx.coroutines.launch
 import org.json.JSONObject
+import java.util.Calendar
+import java.util.TimeZone
+import java.util.concurrent.TimeUnit
 
 
 class MainActivity : ComponentActivity() {
@@ -85,6 +93,8 @@ class MainActivity : ComponentActivity() {
         // ✅ Configuración visual
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
+        setupUsageStatsWorker()
+
         setContent {
             DetoxAppTheme {
                 ProvideWindowInsets {
@@ -93,6 +103,39 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    private fun setupUsageStatsWorker() {
+        val calendar = Calendar.getInstance() // ✅ Hora local del dispositivo
+
+        calendar.set(Calendar.HOUR_OF_DAY, 0)
+        calendar.set(Calendar.MINUTE, 1)
+        calendar.set(Calendar.SECOND, 0)
+        calendar.set(Calendar.MILLISECOND, 0)
+
+        val now = Calendar.getInstance()
+        var initialDelay = calendar.timeInMillis - now.timeInMillis
+
+        if (initialDelay <= 0) {
+            initialDelay += TimeUnit.DAYS.toMillis(1)
+        }
+
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
+
+        val workRequest = PeriodicWorkRequestBuilder<UsageStatsWorker>(
+            1, TimeUnit.DAYS
+        )
+            .setInitialDelay(initialDelay, TimeUnit.MILLISECONDS)
+            .setConstraints(constraints)
+            .build()
+
+        WorkManager.getInstance(applicationContext).enqueueUniquePeriodicWork(
+            "DailyUsageStatsWorker",
+            ExistingPeriodicWorkPolicy.REPLACE,
+            workRequest
+        )
     }
 
     private fun signInWithGoogle() {

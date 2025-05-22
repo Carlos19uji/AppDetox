@@ -100,7 +100,7 @@ fun Ranking(
 
     val rankingList by produceState(initialValue = emptyList<RankingEntry>(), currentUserId) {
         Log.d("Ranking", "Obteniendo ranking para userId: $currentUserId y groupId: $groupId")
-        value = fetchGroupRanking(context, currentUserId, groupId)
+        value = fetchGroupRanking(groupId)
         Log.d("Ranking", "Ranking obtenido: ${value.size} entradas")
     }
 
@@ -397,8 +397,6 @@ fun InviteField(label: String, value: String, onCopy: () -> Unit) {
 }
 
 suspend fun fetchGroupRanking(
-    context: Context,
-    currentUserId: String,
     groupId: String
 ): List<RankingEntry> {
     val db = FirebaseFirestore.getInstance()

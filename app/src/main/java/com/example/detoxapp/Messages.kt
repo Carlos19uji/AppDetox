@@ -46,7 +46,6 @@ import java.time.format.TextStyle
 
 @Composable
 fun Messages(
-    navController: NavController,
     groupViewModel: GroupViewModel,
     auth: FirebaseAuth
 ) {

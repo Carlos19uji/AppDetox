@@ -243,7 +243,7 @@ fun MainApp(
                 }
             }
             composable(Screen.Stats.route){
-                Statistics(navController, auth, groupViewModel)
+                Statistics(auth)
             }
             composable(Screen.Ranking.route){
                 Ranking(auth, groupViewModel)
@@ -259,10 +259,10 @@ fun MainApp(
                 PhaseEndScreen(navController, groupViewModel, auth)
             }
             composable(Screen.Previa.route) {
-                Previa(navController, groupViewModel, auth)
+                Previa(navController, groupViewModel)
             }
             composable(Screen.Messages.route){
-                Messages(navController, groupViewModel, auth)
+                Messages(groupViewModel, auth)
             }
             composable(Screen.EditProfile.route) {
                 EditProfile(navController, groupViewModel, auth, adViewModel)

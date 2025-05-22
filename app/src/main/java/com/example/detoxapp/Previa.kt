@@ -49,11 +49,9 @@ import kotlin.math.pow
 
 
 @Composable
-fun Previa(navController: NavController, groupViewModel: GroupViewModel, auth: FirebaseAuth) {
+fun Previa(navController: NavController, groupViewModel: GroupViewModel) {
 
-    val context = LocalContext.current
     val groupId = groupViewModel.groupId.value ?: return
-    val currentUserId = auth.currentUser?.uid ?: return
     var showInviteDialog by remember { mutableStateOf(false) }
 
     val showDialog = remember { mutableStateOf(false) }
@@ -63,8 +61,6 @@ fun Previa(navController: NavController, groupViewModel: GroupViewModel, auth: F
     val isValidPercentage = inputPercentage.toIntOrNull() in 1..99
     val targetReduction = inputPercentage.toDoubleOrNull() ?: 50.0
     val weeklyFactor = (1 - targetReduction / 100).pow(1.0 / 3)
-    val finalPercentage = weeklyFactor.pow(3) * 100
-    val totalReduction = 100 - finalPercentage
 
     Box(
         modifier = Modifier

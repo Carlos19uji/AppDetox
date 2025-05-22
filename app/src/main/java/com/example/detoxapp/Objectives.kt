@@ -297,8 +297,6 @@ fun Objectives(
             if (showDialog.value && selectedChallenge.value != null) {
                 showChallengeDialog(
                     challenge = selectedChallenge.value!!,
-                    index = selectedIndex.value!!,
-                    cheklist = challengeCheckList,
                     onDismiss = { showDialog.value = false },
                     auth = auth,
                     groupViewModel = groupViewModel,
@@ -392,8 +390,6 @@ fun ObjectiveCard(
 @Composable
 fun showChallengeDialog(
     challenge: Challenge,
-    index: Int,
-    cheklist: MutableMap<Int, Boolean>,
     onDismiss: () -> Unit,
     auth: FirebaseAuth,
     groupViewModel: GroupViewModel,
