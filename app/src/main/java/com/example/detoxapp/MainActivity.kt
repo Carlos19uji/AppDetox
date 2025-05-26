@@ -3,6 +3,7 @@ package com.example.detoxapp
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.preference.PreferenceManager
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -62,6 +63,7 @@ import java.util.Calendar
 import java.util.TimeZone
 import java.util.concurrent.TimeUnit
 
+private const val TAG = "DetoxApp"
 
 class MainActivity : ComponentActivity() {
 
@@ -73,6 +75,18 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Log.d(TAG, "MainActivity.onCreate START")
+
+        val prefs = PreferenceManager.getDefaultSharedPreferences(this)
+        val acceptedTerms = prefs.getBoolean("accepted_terms", false)
+        Log.d(TAG, "MainActivity: accepted_terms = $acceptedTerms")
+
+        if (!acceptedTerms) {
+            Log.d(TAG, "MainActivity: Terms not accepted, launching TermsActivity")
+            startActivity(Intent(this, TermsActivity::class.java))
+            finish()
+            return
+        }
 
         // ✅ Inicializa Branch SDK en onCreate (pero NO uses .init aquí)
         Branch.enableLogging()

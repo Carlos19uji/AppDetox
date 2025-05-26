@@ -1,6 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <style name="Theme.DetoxApp" parent="android:Theme.Material.Light.NoActionBar">
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- 1) Tema base de la app -->
+    <style name="Theme.DetoxApp" parent="Theme.AppCompat.Light.NoActionBar">
         <item name="android:windowBackground">@android:color/black</item>
+        <!-- aquí tus colores globales, etc -->
     </style>
+
+    <!-- 2) Tema del diálogo de Términos -->
+    <style name="Theme.DetoxApp.Dialog" parent="Theme.AppCompat.Light.Dialog.Alert">
+        <item name="android:windowMinWidthMajor">90%</item>
+        <item name="android:windowMinWidthMinor">90%</item>
+        <item name="android:windowBackground">@drawable/dialog_background</item>
+    </style>
+
 </resources>

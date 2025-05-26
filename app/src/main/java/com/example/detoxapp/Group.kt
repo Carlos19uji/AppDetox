@@ -241,7 +241,13 @@ fun GroupMainScreen(
 
             Text("Uso medio diario: ${formatDuration(averageUsage ?: 0L)}", color = usageColor, fontSize = 16.sp)
             Spacer(modifier = Modifier.height(8.dp))
-            Text("Objetivo diario: ${formatDuration((targetUsageMinutes ?: 0) * 60 * 1000L)}", color = Color(0xFFFFD54F), fontSize = 16.sp)
+            if (phase.value != 1) {
+                Text(
+                    "Objetivo diario: ${formatDuration((targetUsageMinutes ?: 0) * 60 * 1000L)}",
+                    color = Color(0xFFFFD54F),
+                    fontSize = 16.sp
+                )
+            }
             Spacer(modifier = Modifier.height(64.dp))
 
             if (topAppDetails.isNotEmpty()) {

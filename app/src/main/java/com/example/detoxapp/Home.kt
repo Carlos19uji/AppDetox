@@ -285,6 +285,7 @@ fun ShowJoinGroupDialog(
                 modifier = Modifier.fillMaxWidth(),
                 textAlign = TextAlign.Center
             )
+            Spacer(modifier = Modifier.height(16.dp))
         },
         text = {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {

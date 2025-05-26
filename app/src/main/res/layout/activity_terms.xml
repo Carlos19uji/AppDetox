@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.core.widget.NestedScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@android:color/white"
+    android:overScrollMode="never">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <!-- Título -->
+        <TextView
+            android:id="@+id/terms_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Términos y Condiciones"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:textColor="@android:color/black"
+            android:gravity="center"
+            android:paddingBottom="8dp"/>
+
+        <!-- Subtítulo -->
+        <TextView
+            android:id="@+id/terms_subtitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="DetoxApp te ayuda a reducir tu tiempo de uso del móvil mediante estadísticas y retos de grupo."
+            android:textSize="14sp"
+            android:textColor="@android:color/black"
+            android:gravity="center"
+            android:paddingBottom="12dp"/>
+
+        <!-- Contenido detallado -->
+        <TextView
+            android:id="@+id/terms_content"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textIsSelectable="true"
+            android:textSize="14sp"
+            android:textColor="@android:color/black"
+            android:lineSpacingExtra="4dp"
+            android:text="
+1. Datos que recopilamos:
+• Tiempo total de pantalla encendida.
+• Número de desbloqueos diarios.
+• Tiempo de uso por aplicación.
+• Progreso de cada fase del reto (porcentaje de reducción).
+
+2. Uso de la información:
+Los datos sirven para generar gráficos y estadísticas personalizadas de tu uso, y para evaluar tu progreso semanal según el porcentaje de reducción acordado con tu grupo de reto.
+
+3. Fases del reto de grupo:
+• Fase 1 (5 días): retos iniciales pequeños mientras la app recopila tus primeros datos de uso. Siempre pasarás a la siguiente fase tras 5 días.
+• Fases 2–4 (cada una dura 7 días): retos y consejos basados en tu objetivo de reducir X % tu tiempo de uso al final del reto.
+  – Cálculo semanal: se divide el porcentaje total a reducir entre 3, aplicándolo sobre tu tiempo medio de uso en Fase 1.
+  – Si alcanzas el objetivo de la fase, avanzas; si no, repites la fase.
+  – Si tu tiempo aumenta por encima del umbral, retrocedes a la fase anterior.
+  – Al superar Fase 4, el reto concluye exitosamente.
+
+4. Colaboración en el reto:
+Los miembros del grupo de reto pueden ver tu fase actual, tiempo medio de uso, nombre y porcentaje de cambio semanal. También disponen de un muro para publicar reflexiones diarias sobre avances y dificultades.
+
+5. Privacidad y almacenamiento:
+Los datos de uso y de grupo se almacenan localmente y en Firebase para sincronizar el progreso entre dispositivos. No compartimos tu información con terceros. Puedes eliminarla desinstalando la app o desde la configuración interna.
+
+6. Aceptación:
+Al pulsar “Aceptar y continuar”, confirmas que has leído y aceptado estos términos y autorizas a DetoxApp a recopilar y procesar tus datos según lo descrito."
+            />
+
+        <!-- Botón de aceptar -->
+        <Button
+            android:id="@+id/button_accept"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Aceptar y continuar"
+            android:backgroundTint="@color/purple_500"
+            android:textColor="@android:color/white"
+            android:layout_marginTop="16dp"/>
+
+    </LinearLayout>
+</androidx.core.widget.NestedScrollView>

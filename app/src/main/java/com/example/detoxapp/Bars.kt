@@ -172,6 +172,13 @@ fun TopBarMenu(
                 }
             )
             DropdownMenuItem(
+                text = { Text("Grupos")},
+                onClick = {
+                    navController.navigate(Screen.Home.route)
+                    expanded.value = false
+                }
+            )
+            DropdownMenuItem(
                 text = { Text("Cerrar Sesión") },
                 onClick = {
                     showLogOutDialog.value = true

@@ -2,15 +2,14 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-
-    <!-- ✅ Permisos necesarios -->
+    <!-- Permisos necesarios -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"
         tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="com.google.android.gms.permission.AD_ID" />
 
-    <!-- ✅ Para consultar otras apps -->
+    <!-- Para consultar otras apps -->
     <queries>
         <intent>
             <action android:name="android.intent.action.MAIN" />
@@ -33,30 +32,37 @@
         android:theme="@style/Theme.DetoxApp"
         tools:targetApi="31">
 
-        <!-- ✅ Branch Keys -->
+        <!-- Branch Keys -->
         <meta-data
             android:name="io.branch.sdk.BranchKey"
             android:value="key_live_mxDfhRTxmE6OrzqndDL6ggblExbGK4wR" />
 
-        <!-- ✅ AdMob -->
+        <!-- AdMob -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
             android:value="ca-app-pub-7055736346592282~4373358224" />
 
-        <!-- ✅ MainActivity -->
+        <!-- TermsActivity con estilo de diálogo -->
+        <activity
+            android:name=".TermsActivity"
+            android:exported="false"
+            android:label="Términos y Privacidad"
+            android:theme="@style/Theme.DetoxApp.Dialog" />
+
+        <!-- MainActivity -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
             android:theme="@style/Theme.DetoxApp">
 
-            <!-- 🔰 Launcher -->
+            <!-- Launcher -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- 🔗 Branch App Links - Live -->
+            <!-- Branch App Links: Live -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -65,7 +71,7 @@
                 <data android:scheme="https" android:host="y6o0b-alternate.app.link" />
             </intent-filter>
 
-            <!-- 🔗 Branch App Links - Test -->
+            <!-- Branch App Links: Test -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -74,7 +80,7 @@
                 <data android:scheme="https" android:host="y6o0b-alternate.test-app.link" />
             </intent-filter>
 
-            <!-- 🔗 URI Scheme -->
+            <!-- URI Scheme -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />

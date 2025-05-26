@@ -88,6 +88,7 @@ android {
 }
 
 dependencies {
+    implementation(libs.androidx.preference.ktx)
     val accompanistVersion = "0.28.0"
 
     // UI/Jetpack Compose

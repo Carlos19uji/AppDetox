@@ -12,7 +12,20 @@
           "package_name": "com.example.detoxapp"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "834925864023-3e9fh77mi9mofep849ia2rp1n7nrr81f.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.detoxapp",
+            "certificate_hash": "e2347de7d113f62bbc40e9fec792a512bf16909a"
+          }
+        },
+        {
+          "client_id": "834925864023-mdhqbljqr5o41r3n8huiv38fq1g0luo1.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyBXo8rLXK6vFID3gDkd3sD7m6VqQoSs10U"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "834925864023-mdhqbljqr5o41r3n8huiv38fq1g0luo1.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }
