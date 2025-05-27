@@ -8,11 +8,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.detoxapp"
+    namespace = "com.carlosrmuji.detoxapp"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.example.detoxapp"
+        applicationId = "com.carlosrmuji.detoxapp"
         minSdk = 26
         targetSdk = 34
         versionCode = 1
@@ -95,6 +95,8 @@ dependencies {
     implementation("androidx.compose.material3:material3:1.2.0")
     implementation("androidx.compose.material:material:1.5.0")
     implementation("androidx.compose.ui:ui-tooling-preview:1.6.0")
+    implementation("com.google.android.material:material:1.11.0")
+    implementation("androidx.core:core-splashscreen:1.0.1")
 
     // Accompanist
     implementation("com.google.accompanist:accompanist-systemuicontroller:$accompanistVersion")

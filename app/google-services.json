@@ -7,17 +7,17 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:834925864023:android:c253c8bae4d4bb5e846f12",
+        "mobilesdk_app_id": "1:834925864023:android:3f088bf4efe6cf79846f12",
         "android_client_info": {
-          "package_name": "com.example.detoxapp"
+          "package_name": "com.carlosrmuji.detoxapp"
         }
       },
       "oauth_client": [
         {
-          "client_id": "834925864023-3e9fh77mi9mofep849ia2rp1n7nrr81f.apps.googleusercontent.com",
+          "client_id": "834925864023-lbb2s9tj09je7tbc75m55t96kc2c3k44.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
-            "package_name": "com.example.detoxapp",
+            "package_name": "com.carlosrmuji.detoxapp",
             "certificate_hash": "e2347de7d113f62bbc40e9fec792a512bf16909a"
           }
         },
