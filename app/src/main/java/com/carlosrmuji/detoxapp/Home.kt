@@ -215,7 +215,7 @@ fun HomeScreen(navController: NavController,
                                                 adViewModel.clearHomeAd()
                                                 adViewModel.loadHomeAd()
                                             }
-                                            navController.navigate(Screen.Group.route) {
+                                            navController.navigate(Screen.Stats.route) {
                                                 popUpTo(Screen.Home.route)
                                             }
                                         }
@@ -437,7 +437,7 @@ fun YourNameJoin(
 
                         withContext(Dispatchers.Main) {
                             groupViewModel.setGroupId(groupID)
-                            navController.navigate(Screen.Group.createRoute(groupID))
+                            navController.navigate(Screen.Stats.route)
                         }
 
                     } catch (e: Exception) {
@@ -623,7 +623,7 @@ fun YourName(
                         }
 
                         groupViewModel.setGroupId(groupID)
-                        navController.navigate(Screen.Group.createRoute(groupRef.id))
+                        navController.navigate(Screen.Stats.route)
                     }.addOnFailureListener {
                         Toast.makeText(context, "Error al guardar en el usuario", Toast.LENGTH_SHORT).show()
                     }

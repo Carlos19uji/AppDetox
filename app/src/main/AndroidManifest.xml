@@ -42,19 +42,13 @@
             android:name="com.google.android.gms.ads.APPLICATION_ID"
             android:value="ca-app-pub-7055736346592282~4373358224" />
 
-        <!-- TermsActivity con estilo de diálogo -->
-        <activity
-            android:name=".TermsActivity"
-            android:exported="false"
-            android:label="Términos y Privacidad"
-            android:theme="@style/Theme.DetoxApp.Dialog" />
-
-        <!-- MainActivity -->
+        <!-- Activity principal -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
-            android:theme="@style/Theme.DetoxApp">
+            android:theme="@style/Theme.DetoxApp"
+            android:screenOrientation="portrait">
 
             <!-- Launcher -->
             <intent-filter>
@@ -62,7 +56,7 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- Branch App Links: Live -->
+            <!-- Branch App Links -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -71,7 +65,6 @@
                 <data android:scheme="https" android:host="y6o0b-alternate.app.link" />
             </intent-filter>
 
-            <!-- Branch App Links: Test -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -87,8 +80,33 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="detoxapp" android:host="open" />
             </intent-filter>
-
         </activity>
+
+        <!-- Términos -->
+        <activity
+            android:name=".TermsActivity"
+            android:exported="false"
+            android:label="Términos y Privacidad"
+            android:theme="@style/Theme.DetoxApp.Dialog" />
+
+        <!-- Pantalla de bloqueo -->
+        <activity
+            android:name=".BlockedAppActivity"
+            android:exported="false"
+            android:theme="@style/Theme.DetoxApp" />
+
+        <!-- Servicio de accesibilidad para bloquear apps aunque la app esté cerrada -->
+        <service
+            android:name=".AppBlockerService"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
 
     </application>
 </manifest>

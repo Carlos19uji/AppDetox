@@ -38,6 +38,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
@@ -55,11 +56,15 @@ import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.SetOptions
 import io.branch.referral.Branch
 import io.branch.referral.validators.IntegrationValidator
 import kotlinx.coroutines.launch
 import org.json.JSONObject
+import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Locale
 import java.util.TimeZone
 import java.util.concurrent.TimeUnit
 
@@ -72,10 +77,13 @@ class MainActivity : ComponentActivity() {
     private lateinit var googleSignInClient: GoogleSignInClient
     private val RC_SIGN_IN = 9001
     private val pendingGroupId = mutableStateOf<String?>(null)  // Estado observable
+    private lateinit var billingViewModel: BillingViewModel
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Log.d(TAG, "MainActivity.onCreate START")
+        billingViewModel = ViewModelProvider(this, ViewModelProvider.AndroidViewModelFactory.getInstance(application))
+            .get(BillingViewModel::class.java)
 
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
         val acceptedTerms = prefs.getBoolean("accepted_terms", false)
@@ -108,6 +116,9 @@ class MainActivity : ComponentActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
         setupUsageStatsWorker()
+
+
+
 
         setContent {
             DetoxAppTheme {
@@ -177,6 +188,69 @@ class MainActivity : ComponentActivity() {
             .addOnCompleteListener(this) { task ->
                 if (task.isSuccessful) {
                     val user = auth.currentUser
+                    val userId = user?.uid
+
+                    if (userId != null) {
+                        val db = FirebaseFirestore.getInstance()
+
+                        // Verifica si el documento 'tokens' dentro de la subcolección IA existe
+                        val tokensDoc = db.collection("users").document(userId)
+                            .collection("IA").document("tokens")
+
+                        tokensDoc.get().addOnSuccessListener { snapshot ->
+                            if (!snapshot.exists()) {
+                                // Si no existe, lo creamos con valores por defecto
+                                val dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale.getDefault())
+                                val now = Calendar.getInstance()
+                                val today = dateFormat.format(now.time)
+
+                                now.add(Calendar.DAY_OF_YEAR, 7)
+                                val renovationDate = dateFormat.format(now.time)
+
+                                val iaTokensData = mapOf(
+                                    "tokens" to 5,
+                                    "tokens_start" to today,
+                                    "token_renovation" to renovationDate
+                                )
+
+                                tokensDoc.set(iaTokensData)
+                                    .addOnSuccessListener {
+                                        Log.d("Firestore", "IA tokens initialized for Google Sign-In")
+                                    }
+                                    .addOnFailureListener { e ->
+                                        Log.e("Firestore", "Error creating IA tokens: ${e.message}")
+                                    }
+                            } else {
+                                Log.d("Firestore", "IA tokens already exist, no need to recreate")
+                            }
+
+                            val planDoc = db.collection("users").document(userId)
+                                .collection("plan").document("plan")
+
+                            planDoc.get().addOnSuccessListener { snapshot ->
+                                if (!snapshot.exists()) {
+                                    val plan = mapOf("plan" to "base_plan")
+
+                                    planDoc.set(plan)
+                                        .addOnSuccessListener {
+                                            Log.d(
+                                                "Firestore",
+                                                "Plan initialized for Google Sign-In"
+                                            )
+                                        }
+                                        .addOnFailureListener { e ->
+                                            Log.e("Firestore", "Error creating plan: ${e.message}")
+                                        }
+                                } else {
+                                    Log.d(
+                                        "Firestore",
+                                        "IA tokens already exist, no need to recreate"
+                                    )
+                                }
+                            }
+                        }
+                    }
+
                     Log.d("FirebaseAuth", "signInWithCredential:success - ${user?.email}")
                 } else {
                     Log.w("FirebaseAuth", "signInWithCredential:failure", task.exception)
@@ -266,11 +340,6 @@ sealed class Screen(val route: String){
             return "your_name_join/$groupId"
         }
     }
-    object Group: Screen("group/{groupId}"){
-        fun createRoute(groupId: String): String{
-            return "group/$groupId"
-        }
-    }
     object Stats: Screen("stats")
     object Ranking: Screen("ranking")
     object PhaseIntroScreen: Screen("phase_intro")
@@ -279,6 +348,9 @@ sealed class Screen(val route: String){
     object Previa: Screen("previa")
     object Messages: Screen("messages")
     object EditProfile: Screen("edit_profile")
+    object AIChat: Screen("ai_chat")
+    object AppBloq: Screen("app_bloq")
+    object PlansScreen: Screen("plans_screen")
 }
 
 @Composable

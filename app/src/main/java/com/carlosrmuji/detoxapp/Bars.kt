@@ -21,6 +21,7 @@ import androidx.compose.material.Text
 import androidx.compose.material.TextButton
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
@@ -185,6 +186,20 @@ fun TopBarMenu(
                 }
             )
             DropdownMenuItem(
+                text = { Text("Planes") },
+                onClick = {
+                    navController.navigate(Screen.PlansScreen.route)
+                    expanded.value = false
+                }
+            )
+            DropdownMenuItem(
+                text = { Text("Restringir Apps") },
+                onClick = {
+                    navController.navigate(Screen.AppBloq.route)
+                    expanded.value = false
+                }
+            )
+            DropdownMenuItem(
                 text = { Text("Grupos") },
                 onClick = {
                     navController.navigate(Screen.Home.route)
@@ -319,30 +334,6 @@ fun BottomBar(
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Home button
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.clickable {
-                Log.d("BottomBar", "Navigating to Home (Group)")
-                navController.navigate(Screen.Group.route) {
-                    popUpTo(navController.graph.startDestinationId)
-                    launchSingleTop = true
-                }
-            }
-        ) {
-            Icon(
-                imageVector = Icons.Default.Home,
-                contentDescription = "Home",
-                tint = if (navController.currentDestination?.route == Screen.Group.route) Color.White else Color.Gray,
-                modifier = Modifier.size(24.dp)
-            )
-            Text(
-                "Home",
-                color = if (navController.currentDestination?.route == Screen.Group.route) Color.White else Color.Gray,
-                fontSize = 12.sp
-            )
-        }
-
         // Stats button
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -395,6 +386,30 @@ fun BottomBar(
             Text(
                 "Fase",
                 color = faseColor,
+                fontSize = 12.sp
+            )
+        }
+
+        //AI Button
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.clickable {
+                Log.d("BottomBar", "Navigating to Home (Group)")
+                navController.navigate(Screen.AIChat.route) {
+                    popUpTo(navController.graph.startDestinationId)
+                    launchSingleTop = true
+                }
+            }
+        ) {
+            Icon(
+                imageVector = Icons.Default.Chat,
+                contentDescription = "IA",
+                tint = if (navController.currentDestination?.route == Screen.AIChat.route) Color.White else Color.Gray,
+                modifier = Modifier.size(24.dp)
+            )
+            Text(
+                "IA",
+                color = if (navController.currentDestination?.route == Screen.AIChat.route) Color.White else Color.Gray,
                 fontSize = 12.sp
             )
         }

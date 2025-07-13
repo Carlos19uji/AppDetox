@@ -1,10 +1,50 @@
 package com.carlosrmuji.detoxapp
 
+import android.graphics.drawable.Drawable
+import androidx.compose.ui.graphics.ImageBitmap
 import com.google.firebase.Timestamp
 import java.text.SimpleDateFormat
+import java.time.DayOfWeek
+import java.time.LocalDateTime
+import java.time.LocalTime
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
+
+
+data class Plan(
+    val id: String,
+    val title: String,
+    val price: String,
+    val features: List<String>
+)
+
+data class InstalledAppInfo(
+    val packageName: String,
+    val appName: String,
+    val icon: ImageBitmap?
+)
+
+data class BlockedApp(
+    val app: InstalledAppInfo,
+    val restrictions: List<AppRestriction>
+)
+
+data class AppRestriction(
+    val days: Set<DayOfWeek>,
+    val from: LocalTime,
+    val to: LocalTime
+)
+
+fun AppRestriction.includes(now: LocalDateTime): Boolean {
+    val nowTime = now.toLocalTime()
+    return days.contains(now.dayOfWeek) && nowTime.isAfter(from) && nowTime.isBefore(to)
+}
+
+data class AIChatMessageData(
+    val text: String,
+    val sender: String
+)
 
 data class GroupData(
     val groupName: String = "",

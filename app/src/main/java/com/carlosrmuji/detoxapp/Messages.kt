@@ -1,5 +1,6 @@
 package com.carlosrmuji.detoxapp
 
+import android.app.Activity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -9,13 +10,27 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.Divider
+import androidx.compose.material.DropdownMenu
+import androidx.compose.material.Icon
+import androidx.compose.material.TextField
+import androidx.compose.material.TextFieldDefaults
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Send
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -27,7 +42,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -35,41 +53,50 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.tasks.await
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import java.time.format.TextStyle
-
+import java.util.UUID
 
 
 @Composable
 fun Messages(
     groupViewModel: GroupViewModel,
-    auth: FirebaseAuth
+    auth: FirebaseAuth,
+    adViewModel: AdViewModel
 ) {
     val currentUserId = auth.currentUser?.uid ?: return
     val groupId = groupViewModel.groupId.value ?: return
     val db = FirebaseFirestore.getInstance()
 
     var messages by remember { mutableStateOf<List<Message>>(emptyList()) }
+    var inputText by remember { mutableStateOf("") }
+    var reflectionDoneToday by remember { mutableStateOf(false) }
+    var editingMessage by remember { mutableStateOf<Message?>(null) }
 
-    val listState = rememberLazyListState() // Estado del scroll
+    val listState = rememberLazyListState()
+    val context = LocalContext.current
+
+    val focusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(editingMessage) {
+        if (editingMessage != null) {
+            delay(100) // pequeño delay para que el TextField esté listo
+            focusRequester.requestFocus()
+        }
+    }
 
     // Cargar mensajes desde Firestore
     LaunchedEffect(Unit) {
         val groupDoc = db.collection("groups").document(groupId).get().await()
         val membersMap = groupDoc.get("members") as? Map<String, Map<String, Any>> ?: emptyMap()
-
         val allMessages = mutableListOf<Message>()
+        val userNameMap = membersMap.mapValues { (_, value) -> value["name"] as? String ?: "Desconocido" }
 
-        // Mapa userId -> nombre
-        val userNameMap = membersMap.mapValues { (_, value) ->
-            value["name"] as? String ?: "Desconocido"
-        }
-
-        // Obtener mensajes de cada usuario
         membersMap.keys.forEach { userId ->
             val userMessagesSnapshot = db.collection("users")
                 .document(userId)
@@ -85,16 +112,18 @@ fun Messages(
                 val text = doc.getString("text") ?: return@mapNotNullTo null
                 val timestamp = doc.getString("timestamp") ?: return@mapNotNullTo null
                 val name = userNameMap[userId] ?: "Desconocido"
-
                 Message(id, userId, timestamp, text, name)
             }
         }
 
-        // Ordenar mensajes por timestamp
         messages = allMessages.sortedBy { it.timestamp }
+
+        val today = LocalDate.now().format(DateTimeFormatter.ISO_DATE)
+        reflectionDoneToday = messages.any { msg ->
+            msg.userId == currentUserId && getDateKey(msg.timestamp) == today
+        }
     }
 
-    // Hacer scroll al último mensaje cuando se cargan
     LaunchedEffect(messages) {
         if (messages.isNotEmpty()) {
             listState.scrollToItem(messages.size - 1)
@@ -117,29 +146,177 @@ fun Messages(
             textAlign = TextAlign.Center
         )
 
-        LazyColumn(
-            state = listState, // Aplicamos el estado del scroll
+        Box(
             modifier = Modifier
-                .fillMaxSize()
+                .weight(1f)
+                .fillMaxWidth()
                 .padding(horizontal = 8.dp),
-            reverseLayout = false
         ) {
-            val shownDates = mutableSetOf<String>()
-            items(messages) { msg ->
-                val dateKey = getDateKey(msg.timestamp)
-                if (dateKey !in shownDates) {
-                    shownDates.add(dateKey)
-                    DateSeparator(getFormattedDate(msg.timestamp))
+            if (messages.isEmpty()) {
+                Text(
+                    text = "No hay reflexiones aún en este grupo.\n\n" +
+                            "Comparte con los miembros del grupo alguna dificultad que hayas tenido " +
+                            "para reducir el uso del móvil, algún beneficio que hayas notado gracias a usarlo menos, " +
+                            "o algo que hayas hecho en lugar de perder el tiempo con el móvil.\n\n" +
+                            "¡Sé el primero en escribir una reflexión!",
+                    color = Color.White,
+                    fontSize = 16.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .padding(16.dp)
+                )
+            } else {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    val shownDates = mutableSetOf<String>()
+                    items(messages) { msg ->
+                        val dateKey = getDateKey(msg.timestamp)
+                        if (dateKey !in shownDates) {
+                            shownDates.add(dateKey)
+                            DateSeparator(getFormattedDate(msg.timestamp))
+                        }
+                        MessageBubble(
+                            message = msg,
+                            isCurrentUser = msg.userId == currentUserId,
+                            onEdit = { message ->
+                                inputText = message.text
+                                editingMessage = message
+                            },
+                            onDelete = { message ->
+                                db.collection("users")
+                                    .document(currentUserId)
+                                    .collection("groups")
+                                    .document(groupId)
+                                    .collection("messages")
+                                    .document(message.id)
+                                    .delete()
+                                    .addOnSuccessListener {
+                                        messages = messages.filter { it.id != message.id }
+                                        reflectionDoneToday = false
+                                    }
+                            }
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
                 }
-                MessageBubble(message = msg, isCurrentUser = msg.userId == currentUserId)
-                Spacer(modifier = Modifier.height(8.dp))
+            }
+        }
+
+        Divider(color = Color.DarkGray, thickness = 1.dp)
+
+        // Input de mensaje o edición
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color.Black)
+                .padding(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            TextField(
+                value = inputText,
+                onValueChange = { if (!reflectionDoneToday || editingMessage != null) inputText = it },
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = 56.dp)
+                    .focusRequester(focusRequester),
+                enabled = !reflectionDoneToday || editingMessage != null,
+                colors = TextFieldDefaults.textFieldColors(
+                    textColor = Color.White,
+                    backgroundColor = Color(0xFF1F1F1F),
+                    disabledTextColor = Color.Gray,
+                    disabledIndicatorColor = Color.Transparent
+                ),
+                placeholder = {
+                    Text(
+                        if (editingMessage != null) "Edita tu reflexión..." else "Escribe tu reflexión...",
+                        color = Color.White
+                    )
+                }
+            )
+
+            IconButton(
+                onClick = {
+                    if (inputText.isNotBlank()) {
+                        if (editingMessage != null) {
+                            // Guardar edición
+                            val msg = editingMessage!!
+                            db.collection("users")
+                                .document(currentUserId)
+                                .collection("groups")
+                                .document(groupId)
+                                .collection("messages")
+                                .whereEqualTo("id", msg.id)
+                                .get()
+                                .addOnSuccessListener { snapshot ->
+                                    snapshot.documents.forEach {
+                                        it.reference.update("text", inputText)
+                                    }
+                                    messages = messages.map {
+                                        if (it.id == msg.id) it.copy(text = inputText) else it
+                                    }
+                                    inputText = ""
+                                    editingMessage = null
+                                }
+                        } else {
+                            // Crear nuevo mensaje
+                            val timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
+                            val messageId = UUID.randomUUID().toString()
+                            val newMessage = mapOf(
+                                "id" to messageId,
+                                "userId" to currentUserId,
+                                "timestamp" to timestamp,
+                                "text" to inputText
+                            )
+
+                            val userMessagesRef = db.collection("users")
+                                .document(currentUserId)
+                                .collection("groups")
+                                .document(groupId)
+                                .collection("messages")
+                                .document(messageId)
+
+                            userMessagesRef.set(newMessage).addOnSuccessListener {
+                                messages = messages + Message(
+                                    id = newMessage["id"] as String,
+                                    userId = currentUserId,
+                                    timestamp = timestamp,
+                                    text = inputText,
+                                    name = "Tú"
+                                )
+                                reflectionDoneToday = true
+                                inputText = ""
+
+                                adViewModel.messageSaveInterstitialAd?.let { ad ->
+                                    ad.show(context as Activity)
+                                    adViewModel.clearMessageSaveAd()
+                                    adViewModel.loadMessageSaveAd()
+                                }
+                            }
+                        }
+                    }
+                },
+                enabled = !reflectionDoneToday || editingMessage != null
+            ) {
+                Icon(
+                    imageVector = if (editingMessage != null) Icons.Default.Check else Icons.Default.Send,
+                    contentDescription = if (editingMessage != null) "Guardar" else "Enviar",
+                    tint = if (!reflectionDoneToday || editingMessage != null) Color.White else Color.Gray
+                )
             }
         }
     }
 }
 
 @Composable
-fun MessageBubble(message: Message, isCurrentUser: Boolean) {
+fun MessageBubble(
+    message: Message,
+    isCurrentUser: Boolean,
+    onEdit: (Message) -> Unit = {},
+    onDelete: (Message) -> Unit = {}
+) {
     val bubbleColor = if (isCurrentUser) Color(0xFF075E54) else Color(0xFF1F1F1F)
     val alignment = if (isCurrentUser) Alignment.End else Alignment.Start
     val textColor = Color.White
@@ -150,44 +327,107 @@ fun MessageBubble(message: Message, isCurrentUser: Boolean) {
 
     val nameColor = remember(message.userId) { getColorForUser(message.userId) }
 
+    val isToday = remember(message.timestamp) {
+        getDateKey(message.timestamp) == LocalDate.now().format(DateTimeFormatter.ISO_DATE)
+    }
+
+    var expanded by remember { mutableStateOf(false) }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 6.dp, horizontal = 4.dp), // más separación
+            .padding(vertical = 6.dp, horizontal = 4.dp),
         horizontalAlignment = alignment
     ) {
-        Column(
+        Box(
             modifier = Modifier
-                .widthIn(max = 250.dp) // burbuja un poco más estrecha
+                .widthIn(max = 250.dp)
                 .background(bubbleColor, shape)
-                .padding(6.dp) // padding interno más compacto
+                .padding(6.dp)
         ) {
-            if (!isCurrentUser) {
-                Text(
-                    text = message.name,
-                    color = nameColor,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 14.sp
-                )
-            }
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = message.text,
-                color = textColor,
-                fontSize = 16.sp,
-                lineHeight = 18.sp
-            )
-
-            Spacer(modifier = Modifier.height(2.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
+                verticalAlignment = Alignment.Top
             ) {
-                Text(
-                    text = formatHour(message.timestamp),
-                    color = Color.LightGray,
-                    fontSize = 12.sp
-                )
+                // Contenido principal (nombre + texto)
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 8.dp) // espacio para la columna derecha
+                ) {
+                    if (!isCurrentUser) {
+                        Text(
+                            text = message.name,
+                            color = nameColor,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 14.sp
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                    }
+
+                    Text(
+                        text = message.text,
+                        color = textColor,
+                        fontSize = 16.sp,
+                        lineHeight = 18.sp
+                    )
+                }
+
+                // Columna fija a la derecha para botón 3 puntos y hora
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier
+                        .heightIn(min = 48.dp)  // para que tenga al menos la altura del texto
+                        .width(36.dp)           // ancho fijo para que no afecte el texto
+                ) {
+                    if (isCurrentUser && isToday) {
+                        Box {
+                            IconButton(
+                                onClick = { expanded = true },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.MoreVert,
+                                    contentDescription = "Más opciones",
+                                    tint = Color.White
+                                )
+                            }
+
+                            DropdownMenu(
+                                expanded = expanded,
+                                onDismissRequest = { expanded = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Editar", color = Color.DarkGray) },
+                                    onClick = {
+                                        expanded = false
+                                        onEdit(message)
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Eliminar", color = Color.DarkGray) },
+                                    onClick = {
+                                        expanded = false
+                                        onDelete(message)
+                                    }
+                                )
+                            }
+                        }
+                    } else {
+                        Spacer(modifier = Modifier.height(24.dp)) // para mantener espacio aunque no haya icono
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Text(
+                        text = formatHour(message.timestamp),
+                        color = Color.LightGray,
+                        fontSize = 12.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             }
         }
     }

@@ -1,5 +1,6 @@
 package com.carlosrmuji.detoxapp
 
+import android.app.Activity
 import android.app.Application
 import android.content.Context
 import android.util.Log
@@ -29,9 +30,11 @@ import androidx.navigation.navArgument
 import com.google.firebase.auth.FirebaseAuth
 import androidx.compose.runtime.State
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.android.billingclient.api.SkuDetails
 import com.example.detoxapp.BottomBar
 import com.example.detoxapp.HomeTopBar
 import com.example.detoxapp.TopBarGroup
@@ -69,6 +72,48 @@ class LinkViewModel : ViewModel() {
     }
 }
 
+class BillingViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val billingManager = BillingManager(application.applicationContext)
+
+    private val _userPlan = mutableStateOf("FREE")
+    val userPlan: State<String> = _userPlan
+
+    private val _purchaseStatus = mutableStateOf<String?>(null)
+    val purchaseStatus: State<String?> = _purchaseStatus
+
+    init {
+        billingManager.onPlanUpdated = { plan ->
+            _userPlan.value = plan
+            _purchaseStatus.value = "Compra exitosa: $plan"
+        }
+        billingManager.onPurchaseError = { error ->
+            _purchaseStatus.value = error
+        }
+        billingManager.startBillingClient()
+        _userPlan.value = billingManager.getUserPlan()
+    }
+
+    fun clearPurchaseStatus() {
+        _purchaseStatus.value = null
+    }
+
+    // Exponer skuDetails para UI si quieres mostrar planes con precios
+    fun getSkuDetails(planId: String): SkuDetails? {
+        return billingManager.getSkuDetails(planId)
+    }
+
+    // Para lanzar la compra se usa este método, pero debe recibir Activity desde UI para llamar a BillingManager.launchBillingFlow
+    fun launchPurchase(activity: Activity, planId: String) {
+        val skuDetails = getSkuDetails(planId)
+        if (skuDetails != null) {
+            billingManager.launchBillingFlow(activity, skuDetails)
+        } else {
+            _purchaseStatus.value = "Plan no encontrado"
+        }
+    }
+}
+
 @Composable
 fun MainApp(
     auth: FirebaseAuth,
@@ -77,6 +122,7 @@ fun MainApp(
 
     val navController = rememberNavController()
     val groupViewModel = remember { GroupViewModel() }
+    val billingViewModel: BillingViewModel = viewModel()
     val adViewModel: AdViewModel = viewModel(
         factory = ViewModelProvider.AndroidViewModelFactory(LocalContext.current.applicationContext as Application)
     )
@@ -120,14 +166,6 @@ fun MainApp(
         topBar = {
             val currentScreen = navController.currentBackStackEntryAsState().value?.destination?.route
             when (currentScreen) {
-                Screen.Group.route -> {
-                    TopBarGroup(
-                        navController = navController,
-                        groupViewModel = groupViewModel,
-                        auth = auth,
-                        modifier = Modifier.statusBarsPadding()
-                    )
-                }
                 in listOf(
                     Screen.Home.route,
                     Screen.Stats.route,
@@ -137,7 +175,9 @@ fun MainApp(
                     Screen.Previa.route,
                     Screen.PhaseIntroScreen.route,
                     Screen.PhaseEndScreen.route,
-                    Screen.EditProfile.route
+                    Screen.EditProfile.route,
+                    Screen.AIChat.route,
+                    Screen.AppBloq.route
                 ) -> {
                     HomeTopBar(
                         navController = navController,
@@ -150,7 +190,7 @@ fun MainApp(
         bottomBar = {
             val currentScreen = navController.currentBackStackEntryAsState().value?.destination?.route
             if (currentScreen in listOf(
-                    Screen.Group.route,
+                    Screen.AIChat.route,
                     Screen.Stats.route,
                     Screen.Messages.route,
                     Screen.Objectives.route,
@@ -158,7 +198,7 @@ fun MainApp(
                     Screen.Previa.route,
                     Screen.PhaseIntroScreen.route,
                     Screen.PhaseEndScreen.route,
-                    Screen.EditProfile.route
+                    Screen.EditProfile.route,
                 )
             ) {
                 BottomBar(
@@ -231,15 +271,8 @@ fun MainApp(
                 }
 
             }
-            composable(
-                route = "group/{groupId}",
-                arguments = listOf(navArgument("groupId") { type = NavType.StringType })
-            ) { backStackEntry ->
-
-                val groupId = backStackEntry.arguments?.getString("groupId")
-                if (groupId != null) {
-                    GroupMainScreen(navController, groupViewModel, auth)
-                }
+            composable(Screen.AIChat.route) {
+                AIChat(navController, adViewModel, auth)
             }
             composable(Screen.Stats.route){
                 Statistics(auth)
@@ -261,10 +294,28 @@ fun MainApp(
                 Previa(navController, groupViewModel)
             }
             composable(Screen.Messages.route){
-                Messages(groupViewModel, auth)
+                Messages(groupViewModel, auth, adViewModel)
             }
             composable(Screen.EditProfile.route) {
                 EditProfile(navController, groupViewModel, auth, adViewModel)
+            }
+            composable(Screen.AppBloq.route) {
+                AppBloqScreen()
+            }
+            composable(Screen.PlansScreen.route) {
+                BillingScreen(
+                    billingViewModel = billingViewModel,
+                    onClose = { navController.popBackStack() },
+                    onPurchasePlan = { planId ->
+                        val context = navController.context
+                        if (context is Activity) {
+                            billingViewModel.launchPurchase(context, planId)
+                        }
+                    },
+                    onCancelPlan = {
+                        Log.d("Billing", "Cancel plan clicked")
+                    }
+                )
             }
         }
     }

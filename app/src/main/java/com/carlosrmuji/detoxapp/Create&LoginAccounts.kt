@@ -3,7 +3,9 @@ package com.carlosrmuji.detoxapp
 import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -18,6 +20,8 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -25,8 +29,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -35,6 +41,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
@@ -43,6 +50,9 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 
 @Composable
 fun FirstScreen(onLoginClick: ()-> Unit, onCreateAccountClick: () -> Unit){
@@ -212,19 +222,54 @@ fun CreateAccount(
                                     "password" to passwordState.value
                                 )
 
-                                userDoc.set(userInfo)
-                                    .addOnSuccessListener {
-                                        Log.d("Firestore", "User data saved successfully!")
-                                        val currentUser = auth.currentUser
-                                        if (currentUser != null) {
-                                            navController.navigate(Screen.Home.route)
-                                        } else {
-                                            Log.e("Auth", "User is not authenticated")
+                                userDoc.set(userInfo).addOnSuccessListener {
+
+                                    Log.d("Firestore", "User data saved successfully!")
+
+
+                                    val dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale.getDefault())
+                                    val now = Calendar.getInstance()
+                                    val today = dateFormat.format(now.time)
+
+                                    now.add(Calendar.DAY_OF_YEAR, 7)
+                                    val renovationDate = dateFormat.format(now.time)
+
+                                    // ③ Crear subcolección IA/tokens
+                                    val iaTokensData = mapOf(
+                                        "tokens" to 5,
+                                        "tokens_start" to today,
+                                        "token_renovation" to renovationDate
+                                    )
+
+                                    db.collection("users")
+                                        .document(userId)
+                                        .collection("IA")
+                                        .document("tokens") // puedes cambiar "tokens" por cualquier otro ID
+                                        .set(iaTokensData)
+                                        .addOnSuccessListener {
+                                            Log.d("Firestore", "IA token info saved successfully!")
                                         }
-                                    }
-                                    .addOnFailureListener { e ->
-                                        Log.e("Firestore", "Error saving user data: ${e.message}")
-                                    }
+                                        .addOnFailureListener { e ->
+                                            Log.e("Firestore", "Error saving IA data: ${e.message}")
+                                        }
+
+                                    val planData = mapOf("plan" to "base_plan")
+
+                                    db.collection("users").document(userId)
+                                        .collection("plan").document("plan")
+                                        .set(planData)
+                                        .addOnSuccessListener {
+                                            Log.d("Firestore", "Plan info saved successfully!")
+                                            navController.navigate(Screen.Home.route)
+                                        }
+                                        .addOnFailureListener { e ->
+                                            Log.e("Firestore", "Error saving plan data: ${e.message}")
+                                        }
+
+
+                                }.addOnFailureListener { e ->
+                                    Log.e("Firestore", "Error saving user data: ${e.message}")
+                                }
                             }
                         } else {
                             Log.e("Auth", "Error creating user: ${task.exception?.message}")
@@ -341,77 +386,123 @@ fun PasswordRecovery(auth: FirebaseAuth, navController: NavController){
 fun email(emailState: MutableState<String>) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.Center
+        horizontalArrangement = Arrangement.Center,
+        modifier = Modifier.fillMaxWidth()
     ) {
         Icon(
             imageVector = Icons.Default.Email,
-            contentDescription = "Mail",
-            modifier = Modifier.size(35.dp),
+            contentDescription = "Email icon",
+            modifier = Modifier.size(28.dp),
             tint = Color.Gray
         )
 
-        Spacer(modifier = Modifier.width(16.dp))
+        Spacer(modifier = Modifier.width(12.dp))
 
-        BasicTextField(
-            value = emailState.value,
-            onValueChange = { emailState.value = it },
+        Box(
             modifier = Modifier
-                .width(300.dp)
-                .padding(vertical = 8.dp)
-                .background(Color(0xFF444444), RoundedCornerShape(8.dp)) // Gris oscuro
-                .padding(16.dp),
-            textStyle = TextStyle(color = Color.White),
-            decorationBox = { innerTextField ->
-                if (emailState.value.isEmpty()) {
-                    Text(text = "you@example.com", color = Color.LightGray)
+                .fillMaxWidth(0.85f) // Ancho fijo relativo
+                .background(Color(0xFF444444), RoundedCornerShape(8.dp))
+                .height(56.dp) // Altura fija
+                .padding(horizontal = 16.dp),
+            contentAlignment = Alignment.CenterStart
+        ) {
+            BasicTextField(
+                value = emailState.value,
+                onValueChange = { emailState.value = it },
+                modifier = Modifier.fillMaxWidth(),
+                textStyle = TextStyle(color = Color.White),
+                singleLine = true,
+                decorationBox = { innerTextField ->
+                    if (emailState.value.isEmpty()) {
+                        Text("you@example.com", color = Color.LightGray)
+                    }
+                    innerTextField()
                 }
-                innerTextField()
-            }
-        )
+            )
+        }
     }
+
+    Spacer(modifier = Modifier.height(12.dp))
 }
 
 
 class LastCharVisiblePasswordTransformation : VisualTransformation {
+    var passwordVisible by mutableStateOf(false)
+
     override fun filter(text: AnnotatedString): TransformedText {
-        val transformed = text.text.mapIndexed { index, c ->
-            if (index == text.text.lastIndex) c else '*'
-        }.joinToString("")
+        val transformed = if (passwordVisible) {
+            text.text
+        } else {
+            text.text.mapIndexed { index, c ->
+                if (index == text.text.lastIndex) c else '*'
+            }.joinToString("")
+        }
         return TransformedText(AnnotatedString(transformed), OffsetMapping.Identity)
+    }
+
+    fun togglePasswordVisibility() {
+        passwordVisible = !passwordVisible
     }
 }
 
+
 @Composable
 fun password(passwordState: MutableState<String>) {
+    var passwordVisible by remember { mutableStateOf(false) }
+
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.Center
+        horizontalArrangement = Arrangement.Center,
+        modifier = Modifier.fillMaxWidth()
     ) {
         Icon(
             imageVector = Icons.Default.Lock,
             contentDescription = "Padlock",
-            modifier = Modifier.size(35.dp),
+            modifier = Modifier.size(28.dp),
             tint = Color.Gray
         )
 
-        Spacer(modifier = Modifier.width(16.dp))
+        Spacer(modifier = Modifier.width(12.dp))
 
-        BasicTextField(
-            value = passwordState.value,
-            onValueChange = { passwordState.value = it },
+        Box(
             modifier = Modifier
-                .width(300.dp)
-                .padding(vertical = 8.dp)
+                .fillMaxWidth(0.85f) // Ancho fijo relativo
                 .background(Color(0xFF444444), RoundedCornerShape(8.dp))
-                .padding(16.dp),
-            textStyle = TextStyle(color = Color.White),
-            visualTransformation = LastCharVisiblePasswordTransformation(),
-            decorationBox = { innerTextField ->
-                if (passwordState.value.isEmpty()) {
-                    Text(text = "Password", color = Color.LightGray)
-                }
-                innerTextField()
+                .height(56.dp) // Altura fija
+                .padding(horizontal = 16.dp),
+            contentAlignment = Alignment.CenterStart
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                BasicTextField(
+                    value = passwordState.value,
+                    onValueChange = { passwordState.value = it },
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 8.dp),
+                    textStyle = TextStyle(color = Color.White),
+                    singleLine = true,
+                    visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    decorationBox = { innerTextField ->
+                        if (passwordState.value.isEmpty()) {
+                            Text("Password", color = Color.LightGray)
+                        }
+                        innerTextField()
+                    }
+                )
+
+                Icon(
+                    imageVector = if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                    contentDescription = "Toggle password visibility",
+                    modifier = Modifier
+                        .size(24.dp)
+                        .clickable { passwordVisible = !passwordVisible },
+                    tint = Color.Gray
+                )
             }
-        )
+        }
     }
+    Spacer(modifier = Modifier.height(12.dp))
 }

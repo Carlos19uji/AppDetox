@@ -17,6 +17,7 @@ class AdViewModel(application: Application) : AndroidViewModel(application) {
     private var _editProfileInterstitialAd: InterstitialAd? = null
     private var _messageSaveInterstitialAd: InterstitialAd? = null
     private var _joinOrCreateGroupInterstitialAd: InterstitialAd? = null
+    private var _aichatInterstitialAd: InterstitialAd? = null
 
     val homeInterstitialAd: InterstitialAd?
         get() = _homeInterstitialAd
@@ -30,11 +31,15 @@ class AdViewModel(application: Application) : AndroidViewModel(application) {
     val joinOrCreateGroupInterstitialAd: InterstitialAd?
         get() = _joinOrCreateGroupInterstitialAd
 
+    val aichatInterstitialAd: InterstitialAd?
+        get() = _aichatInterstitialAd
+
     init {
         loadHomeAd()
         loadEditProfileAd()
         loadMessageSaveAd()
         loadCreateOrJoinGroupAd()
+        loadAiChatAd()
     }
 
     fun loadHomeAd() {
@@ -111,6 +116,25 @@ class AdViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
+    fun loadAiChatAd() {
+        InterstitialAd.load(
+            context,
+            "ca-app-pub-7055736346592282/4705356095", // AdUnitID para guardar mensaje
+            adRequest,
+            object : InterstitialAdLoadCallback() {
+                override fun onAdLoaded(ad: InterstitialAd) {
+                    _aichatInterstitialAd = ad
+                    Log.d("AdViewModel", "AIChat Interstitial Ad loaded")
+                }
+
+                override fun onAdFailedToLoad(adError: LoadAdError) {
+                    _aichatInterstitialAd = null
+                    Log.e("AdViewModel", "AIChat Interstitial Ad failed to load: ${adError.message}")
+                }
+            }
+        )
+    }
+
     fun clearHomeAd() {
         _homeInterstitialAd = null
     }
@@ -124,5 +148,8 @@ class AdViewModel(application: Application) : AndroidViewModel(application) {
     }
     fun clearCreateOrJoinAd(){
         _joinOrCreateGroupInterstitialAd = null
+    }
+    fun clearAIChatAd(){
+        _aichatInterstitialAd = null
     }
 }
