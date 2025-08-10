@@ -62,16 +62,20 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.core.graphics.drawable.toBitmap
+import androidx.navigation.NavController
 import com.google.firebase.Firebase
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.auth
+import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.firestore
+import kotlinx.coroutines.tasks.await
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
 @Composable
-fun AppBloqScreen() {
+fun AppBloqScreen(navController: NavController) {
     val context = LocalContext.current
     var bloquedApps by remember { mutableStateOf(listOf<BlockedApp>()) }
     var showAppPicker by remember { mutableStateOf(false) }
@@ -83,6 +87,17 @@ fun AppBloqScreen() {
 
     val installedApps = remember { getInstalledApps(context) }
     val userId = getUserId()
+
+    var userPlan by remember { mutableStateOf("base_plan") }
+    var showLimitMessage by remember { mutableStateOf(false) }
+
+    val limitReached = when (userPlan) {
+        "base_plan" -> bloquedApps.size >= 2
+        "plus_plan" -> bloquedApps.size >= 5
+        "premium_plan" -> false
+        else -> true
+    }
+
 
     LaunchedEffect(userId) {
         loadBlockedAppsFromFirestore(
@@ -99,6 +114,38 @@ fun AppBloqScreen() {
             }
         )
     }
+
+    LaunchedEffect(userId) {
+        try {
+            // 1. Obtener el plan del usuario
+            val planSnapshot = Firebase.firestore
+                .collection("users")
+                .document(userId)
+                .collection("plan")
+                .document("plan")
+                .get()
+                .await()
+
+            userPlan = planSnapshot.getString("plan") ?: "base_plan"
+
+            // 2. Obtener las apps bloqueadas
+            val loadedApps = loadBlockedAppsFromFirestoreSuspend(userId)
+
+            // 3. Aplicar el límite del plan
+            val filteredApps = enforcePlanLimit(loadedApps, userPlan, userId)
+
+            // 4. Mapear con apps instaladas
+            bloquedApps = filteredApps.mapNotNull { blockedApp ->
+                findInstalledAppByPackage(installedApps, blockedApp.app.packageName)
+                    ?.let { blockedApp.copy(app = it) }
+            }
+
+        } catch (e: Exception) {
+            Log.e("AppBloqScreen", "Error cargando apps o plan", e)
+            Toast.makeText(context, "Error cargando restricciones: ${e.message}", Toast.LENGTH_LONG).show()
+        }
+    }
+
 
     Box(
         modifier = Modifier
@@ -154,16 +201,52 @@ fun AppBloqScreen() {
                 }
             }
 
-            restrictionEditError?.let { errorMsg ->
-                Text(
-                    text = errorMsg,
-                    color = Color.Red,
-                    fontSize = 16.sp,
-                    textAlign = TextAlign.Center,
+            // ✅ Mostrar mensaje de límite alcanzado
+            if (showLimitMessage) {
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 8.dp)
-                )
+                        .padding(top = 16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "Has alcanzado el límite de apps a restringir para tu plan.\nSi quieres restringir más apps, mejora tu plan.",
+                        color = Color(0xFFFF4C4C), // rojo más intenso
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Button(
+                        onClick = { navController.navigate(Screen.PlansScreen.route) },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF5A4F8D)) // mismo que "Restringir app"
+                    ) {
+                        Text("Mejorar plan", color = Color.White)
+                    }
+                }
+            }
+
+
+            // ✅ Estilo unificado para el mensaje de error de edición
+            restrictionEditError?.let { errorMsg ->
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = errorMsg,
+                        color = Color(0xFFFF4C4C), // mismo rojo intenso
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -171,10 +254,15 @@ fun AppBloqScreen() {
             // Botón
             Button(
                 onClick = {
-                    if (isAccessibilityServiceEnabled(context, AppBlockerService::class.java)) {
-                        showAppPicker = true
+                    if (limitReached) {
+                        showLimitMessage = true
                     } else {
-                        showAccessibilityDialog = true
+                        showLimitMessage = false
+                        if (isAccessibilityServiceEnabled(context, AppBlockerService::class.java)) {
+                            showAppPicker = true
+                        } else {
+                            showAccessibilityDialog = true
+                        }
                     }
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF5A4F8D)),
@@ -207,6 +295,8 @@ fun AppBloqScreen() {
         if (showScheduledialog && selectedApp != null) {
             ScheduleDialog(
                 appName = selectedApp!!.appName,
+                appPackage = selectedApp!!.packageName,
+                navController = navController,
                 initialRestrictions = selectedRestrictions,
                 onConfirm = { newRestriction ->
                     val existingRestrictions = bloquedApps
@@ -407,10 +497,13 @@ fun AppPickerDialog(
 @Composable
 fun ScheduleDialog(
     appName: String,
+    appPackage: String,
+    navController: NavController,
     initialRestrictions: List<AppRestriction>,
     onConfirm: (AppRestriction) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val context = LocalContext.current
     val combinedDays = initialRestrictions.flatMap { it.days }.toSet()
     val initialFrom = initialRestrictions.firstOrNull()?.from ?: LocalTime.of(18, 0)
     val initialTo = initialRestrictions.firstOrNull()?.to ?: LocalTime.of(22, 0)
@@ -419,6 +512,10 @@ fun ScheduleDialog(
     var from by remember { mutableStateOf(initialFrom) }
     var to by remember { mutableStateOf(initialTo) }
     var errorText by remember { mutableStateOf<String?>(null) }
+    var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+    var isDeleting by remember { mutableStateOf(false) }
+
+    val userId = FirebaseAuth.getInstance().currentUser?.uid ?: ""
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
@@ -473,8 +570,9 @@ fun ScheduleDialog(
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = errorText!!,
-                        color = Color.Red,
-                        fontSize = 14.sp
+                        color = Color(0xFFFF6B6B),
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
 
@@ -507,8 +605,72 @@ fun ScheduleDialog(
                         Text("Añadir restricción", color = Color.White)
                     }
                 }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                OutlinedButton(
+                    onClick = { showDeleteConfirmDialog = true },
+                    modifier = Modifier.align(Alignment.CenterHorizontally),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Gray),
+                    enabled = !isDeleting
+                ) {
+                    Text("Eliminar restricciones", color = Color.Gray)
+                }
             }
         }
+    }
+
+    if (showDeleteConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { if (!isDeleting) showDeleteConfirmDialog = false },
+            title = {
+                Text("¿Eliminar restricciones?", color = Color.White)
+            },
+            text = {
+                Text(
+                    "¿Estás seguro de que quieres cancelar las restricciones para $appName?",
+                    color = Color.LightGray
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        isDeleting = true
+                        val docRef = FirebaseFirestore.getInstance()
+                            .collection("users")
+                            .document(userId)
+                            .collection("restrictions")
+                            .document(appPackage)
+
+                        docRef.delete()
+                            .addOnSuccessListener {
+                                Toast.makeText(context, "Restricciones eliminadas", Toast.LENGTH_SHORT).show()
+                                isDeleting = false
+                                showDeleteConfirmDialog = false
+                                onDismiss()
+                                navController.navigate(Screen.AppBloq.route)
+                            }
+                            .addOnFailureListener { e ->
+                                Toast.makeText(context, "Error eliminando restricciones: ${e.message}", Toast.LENGTH_LONG).show()
+                                isDeleting = false
+                            }
+                    },
+                    enabled = !isDeleting
+                ) {
+                    Text("Confirmar", color = Color.Red)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { if (!isDeleting) showDeleteConfirmDialog = false },
+                    enabled = !isDeleting
+                ) {
+                    Text("Cancelar", color = Color.White)
+                }
+            },
+            backgroundColor = Color(0xFF1E1E1E),
+            shape = RoundedCornerShape(12.dp)
+        )
     }
 }
 
@@ -666,4 +828,70 @@ fun openAccessibilitySettings(context: Context) {
     val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
     intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
     context.startActivity(intent)
+}
+
+suspend fun enforcePlanLimit(
+    apps: List<BlockedApp>,
+    userPlan: String,
+    userId: String
+): List<BlockedApp> {
+    val allowed = when (userPlan) {
+        "base_plan" -> 2
+        "plus_plan" -> 5
+        "premium_plan" -> Int.MAX_VALUE
+        else -> 2
+    }
+
+    if (apps.size <= allowed) return apps
+
+    // Ordena alfabéticamente para eliminar las últimas (puedes usar otro criterio si prefieres)
+    val sortedApps = apps.sortedBy { it.app.appName }
+    val toKeep = sortedApps.take(allowed)
+    val toRemove = sortedApps.drop(allowed)
+
+    // Eliminar de Firestore
+    val db = Firebase.firestore
+    toRemove.forEach { blockedApp ->
+        db.collection("users")
+            .document(userId)
+            .collection("restrictions")
+            .document(blockedApp.app.packageName)
+            .delete()
+    }
+
+    return toKeep
+}
+
+suspend fun loadBlockedAppsFromFirestoreSuspend(userId: String): List<BlockedApp> {
+    val db = Firebase.firestore
+
+    val documents = db.collection("users")
+        .document(userId)
+        .collection("restrictions")
+        .get()
+        .await()
+
+    return documents.mapNotNull { doc ->
+        val appName = doc.getString("appName") ?: return@mapNotNull null
+        val packageName = doc.getString("packageName") ?: return@mapNotNull null
+        val restrictionsData = doc.get("restrictions") as? List<Map<String, String>> ?: emptyList()
+
+        val restrictions = restrictionsData.mapNotNull { map ->
+            val dayName = map["day"] ?: return@mapNotNull null
+            val fromStr = map["from"] ?: return@mapNotNull null
+            val toStr = map["to"] ?: return@mapNotNull null
+
+            try {
+                val day = DayOfWeek.valueOf(dayName)
+                val from = LocalTime.parse(fromStr)
+                val to = LocalTime.parse(toStr)
+                AppRestriction(setOf(day), from, to)
+            } catch (e: Exception) {
+                null
+            }
+        }
+
+        val appInfo = InstalledAppInfo(packageName, appName, icon = null)
+        BlockedApp(appInfo, restrictions)
+    }
 }

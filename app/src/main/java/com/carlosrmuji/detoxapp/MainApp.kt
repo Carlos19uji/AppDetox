@@ -76,7 +76,7 @@ class BillingViewModel(application: Application) : AndroidViewModel(application)
 
     private val billingManager = BillingManager(application.applicationContext)
 
-    private val _userPlan = mutableStateOf("FREE")
+    private val _userPlan = mutableStateOf("base_plan")
     val userPlan: State<String> = _userPlan
 
     private val _purchaseStatus = mutableStateOf<String?>(null)
@@ -87,30 +87,58 @@ class BillingViewModel(application: Application) : AndroidViewModel(application)
             _userPlan.value = plan
             _purchaseStatus.value = "Compra exitosa: $plan"
         }
+
         billingManager.onPurchaseError = { error ->
             _purchaseStatus.value = error
         }
+
         billingManager.startBillingClient()
-        _userPlan.value = billingManager.getUserPlan()
+
+        fetchPlanFromFirestore()
     }
 
     fun clearPurchaseStatus() {
         _purchaseStatus.value = null
     }
 
-    // Exponer skuDetails para UI si quieres mostrar planes con precios
-    fun getSkuDetails(planId: String): SkuDetails? {
-        return billingManager.getSkuDetails(planId)
+    fun refreshUserPlanFromBilling() {
+        billingManager.startBillingClient()
     }
 
-    // Para lanzar la compra se usa este método, pero debe recibir Activity desde UI para llamar a BillingManager.launchBillingFlow
-    fun launchPurchase(activity: Activity, planId: String) {
-        val skuDetails = getSkuDetails(planId)
-        if (skuDetails != null) {
-            billingManager.launchBillingFlow(activity, skuDetails)
+    fun launchPurchase(activity: Activity, basePlanId: String) {
+        val googlePlayPlanId = basePlanId.replace("_", "-") // Convertimos para Google Play
+        val productDetails = billingManager.getProductDetails(googlePlayPlanId)
+
+        if (productDetails != null) {
+            billingManager.launchBillingFlow(activity, productDetails, googlePlayPlanId)
         } else {
-            _purchaseStatus.value = "Plan no encontrado"
+            _purchaseStatus.value = "Plan no encontrado para: $basePlanId"
         }
+    }
+
+    private fun fetchPlanFromFirestore() {
+        val userId = FirebaseAuth.getInstance().currentUser?.uid ?: return
+
+        FirebaseFirestore.getInstance()
+            .collection("users")
+            .document(userId)
+            .collection("plan")
+            .document("plan")
+            .addSnapshotListener { document, error ->
+                if (error != null) {
+                    Log.e("BillingViewModel", "Error al escuchar plan: ${error.message}")
+                    return@addSnapshotListener
+                }
+
+                if (document != null && document.exists()) {
+                    val firestorePlan = document.getString("plan")
+                    if (!firestorePlan.isNullOrBlank()) {
+                        _userPlan.value = firestorePlan.lowercase()
+                    } else {
+                        Log.d("BillingViewModel", "Firestore plan vacío, no se actualiza.")
+                    }
+                }
+            }
     }
 }
 
@@ -300,21 +328,12 @@ fun MainApp(
                 EditProfile(navController, groupViewModel, auth, adViewModel)
             }
             composable(Screen.AppBloq.route) {
-                AppBloqScreen()
+                AppBloqScreen(navController)
             }
             composable(Screen.PlansScreen.route) {
                 BillingScreen(
                     billingViewModel = billingViewModel,
-                    onClose = { navController.popBackStack() },
-                    onPurchasePlan = { planId ->
-                        val context = navController.context
-                        if (context is Activity) {
-                            billingViewModel.launchPurchase(context, planId)
-                        }
-                    },
-                    onCancelPlan = {
-                        Log.d("Billing", "Cancel plan clicked")
-                    }
+                    onClose = { navController.popBackStack() }
                 )
             }
         }

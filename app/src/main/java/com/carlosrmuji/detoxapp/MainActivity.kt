@@ -1,5 +1,6 @@
 package com.carlosrmuji.detoxapp
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -45,6 +46,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.example.detoxapp.ui.theme.DetoxAppTheme
@@ -63,6 +65,8 @@ import io.branch.referral.validators.IntegrationValidator
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.text.SimpleDateFormat
+import java.time.Duration
+import java.time.LocalDateTime
 import java.util.Calendar
 import java.util.Locale
 import java.util.TimeZone
@@ -116,7 +120,12 @@ class MainActivity : ComponentActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
         setupUsageStatsWorker()
+        scheduleTokenRenewalWorker(this)
 
+        val user = auth.currentUser
+        if (user != null) {
+            billingViewModel.refreshUserPlanFromBilling()
+        }
 
 
 
@@ -128,6 +137,45 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    fun scheduleTokenRenewalWorker(context: Context) {
+        val calendar = Calendar.getInstance() // Hora actual
+
+        // Establece la hora deseada para el worker: 14:10
+        calendar.set(Calendar.HOUR_OF_DAY, 15)
+        calendar.set(Calendar.MINUTE, 15)
+        calendar.set(Calendar.SECOND, 0)
+        calendar.set(Calendar.MILLISECOND, 0)
+
+        val now = Calendar.getInstance()
+        var initialDelay = calendar.timeInMillis - now.timeInMillis
+
+        // Si ya pasó la hora de hoy, programa para mañana
+        if (initialDelay <= 0) {
+            initialDelay += TimeUnit.DAYS.toMillis(1)
+        }
+
+        Log.d("TokenRenewalWorker", "⏳ Programando worker para ejecutarse en ${initialDelay / 1000 / 60} minutos")
+
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
+
+        val workRequest = PeriodicWorkRequestBuilder<TokenRenewalWorker>(
+            1, TimeUnit.DAYS
+        )
+            .setInitialDelay(initialDelay, TimeUnit.MILLISECONDS)
+            .setConstraints(constraints)
+            .build()
+
+        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+            "TokenRenewalWorker",
+            ExistingPeriodicWorkPolicy.REPLACE, // igual que el otro worker
+            workRequest
+        )
+
+        Log.d("TokenRenewalWorker", "✅ Worker programado con delay inicial: $initialDelay ms")
     }
 
     private fun setupUsageStatsWorker() {
@@ -189,69 +237,51 @@ class MainActivity : ComponentActivity() {
                 if (task.isSuccessful) {
                     val user = auth.currentUser
                     val userId = user?.uid
+                    val db = FirebaseFirestore.getInstance()
+
+                    val isNewUser = task.result?.additionalUserInfo?.isNewUser == true
 
                     if (userId != null) {
-                        val db = FirebaseFirestore.getInstance()
+                        if (isNewUser) {
+                            val dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale.getDefault())
+                            val now = Calendar.getInstance()
+                            val today = dateFormat.format(now.time)
+                            now.add(Calendar.DAY_OF_YEAR, 7)
+                            val renovationDate = dateFormat.format(now.time)
 
-                        // Verifica si el documento 'tokens' dentro de la subcolección IA existe
-                        val tokensDoc = db.collection("users").document(userId)
-                            .collection("IA").document("tokens")
+                            val iaTokensData = mapOf(
+                                "tokens" to 5,
+                                "tokens_start" to today,
+                                "token_renovation" to renovationDate
+                            )
 
-                        tokensDoc.get().addOnSuccessListener { snapshot ->
-                            if (!snapshot.exists()) {
-                                // Si no existe, lo creamos con valores por defecto
-                                val dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale.getDefault())
-                                val now = Calendar.getInstance()
-                                val today = dateFormat.format(now.time)
+                            val tokensDoc = db.collection("users").document(userId)
+                                .collection("IA").document("tokens")
 
-                                now.add(Calendar.DAY_OF_YEAR, 7)
-                                val renovationDate = dateFormat.format(now.time)
+                            tokensDoc.set(iaTokensData)
+                                .addOnSuccessListener {
+                                    Log.d("Firestore", "IA tokens initialized for new user")
+                                }
+                                .addOnFailureListener { e ->
+                                    Log.e("Firestore", "Error creating IA tokens: ${e.message}")
+                                }
 
-                                val iaTokensData = mapOf(
-                                    "tokens" to 5,
-                                    "tokens_start" to today,
-                                    "token_renovation" to renovationDate
-                                )
-
-                                tokensDoc.set(iaTokensData)
-                                    .addOnSuccessListener {
-                                        Log.d("Firestore", "IA tokens initialized for Google Sign-In")
-                                    }
-                                    .addOnFailureListener { e ->
-                                        Log.e("Firestore", "Error creating IA tokens: ${e.message}")
-                                    }
-                            } else {
-                                Log.d("Firestore", "IA tokens already exist, no need to recreate")
-                            }
-
-                            val planDoc = db.collection("users").document(userId)
+                            // 🔒 Crear plan solo si es nuevo usuario
+                            val planDocRef = db.collection("users").document(userId)
                                 .collection("plan").document("plan")
 
-                            planDoc.get().addOnSuccessListener { snapshot ->
-                                if (!snapshot.exists()) {
-                                    val plan = mapOf("plan" to "base_plan")
-
-                                    planDoc.set(plan)
-                                        .addOnSuccessListener {
-                                            Log.d(
-                                                "Firestore",
-                                                "Plan initialized for Google Sign-In"
-                                            )
-                                        }
-                                        .addOnFailureListener { e ->
-                                            Log.e("Firestore", "Error creating plan: ${e.message}")
-                                        }
-                                } else {
-                                    Log.d(
-                                        "Firestore",
-                                        "IA tokens already exist, no need to recreate"
-                                    )
+                            val plan = mapOf("plan" to "base_plan")
+                            planDocRef.set(plan)
+                                .addOnSuccessListener {
+                                    Log.d("Firestore", "Plan set to base_plan for new user")
                                 }
-                            }
+                                .addOnFailureListener { e ->
+                                    Log.e("Firestore", "Error writing plan: ${e.message}")
+                                }
                         }
-                    }
 
-                    Log.d("FirebaseAuth", "signInWithCredential:success - ${user?.email}")
+                        Log.d("FirebaseAuth", "signInWithCredential:success - ${user?.email}")
+                    }
                 } else {
                     Log.w("FirebaseAuth", "signInWithCredential:failure", task.exception)
                 }

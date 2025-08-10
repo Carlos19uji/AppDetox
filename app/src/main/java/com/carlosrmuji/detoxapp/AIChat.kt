@@ -35,6 +35,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBox
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -94,11 +96,26 @@ fun AIChat(
     val listState = rememberLazyListState()
     var isLoading by remember { mutableStateOf(true) }
     var isThinking by remember { mutableStateOf(false) }
+    var tokenRenewal by remember { mutableStateOf<String?>(null) }  // Estado nuevo para la fecha de renovación
 
     // Cargar tokens una vez al abrir
     LaunchedEffect(userId) {
         userId?.let {
-            tokens = getTokens(it)
+            val firestore = FirebaseFirestore.getInstance()
+            try {
+                val doc = firestore.collection("users")
+                    .document(it)
+                    .collection("IA")
+                    .document("tokens")
+                    .get()
+                    .await()
+
+                tokens = doc.getLong("tokens")?.toInt() ?: 0
+                tokenRenewal = doc.getString("token_renovation")  // Carga la fecha aquí
+            } catch (e: Exception) {
+                tokens = 0
+                tokenRenewal = null
+            }
         }
     }
 
@@ -149,7 +166,8 @@ fun AIChat(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 tokens?.let {
-                    Text("Tokens: $it", color = Color.Gray)
+                    val tokenDisplay = if (it == 999) "∞" else it.toString()
+                    Text("Tokens: $tokenDisplay", color = Color.Gray)
                 }
             }
 
@@ -186,6 +204,15 @@ fun AIChat(
 
             Divider(color = Color.DarkGray, thickness = 1.dp)
 
+            if (tokens != null && tokens == 0) {
+                NoTokensMessage(
+                    tokenRenewal = tokenRenewal,
+                    onUpgradeClick = {
+                        navController.navigate(Screen.PlansScreen.route)
+                    }
+                )
+            }
+
             // Input para el prompt
             MessageInput(
                 prompt = prompt,
@@ -196,8 +223,8 @@ fun AIChat(
                             coroutineScope.launch {
                                 userId?.let {
                                     val userPrompt = prompt
-                                    prompt = "" // Limpiar input
-                                    isThinking = true // Mostrar "Pensando..."
+                                    prompt = ""
+                                    isThinking = true
 
                                     // Guardamos mensaje del usuario
                                     saveMessage(it, userPrompt, "user")
@@ -205,37 +232,36 @@ fun AIChat(
                                     delay(100)
                                     listState.animateScrollToItem(messages.size + 1)
 
-                                    // Llamamos a la IA
                                     val aiResponse = callOpenAI(userPrompt)
 
-                                    // Solo si la respuesta no está vacía y no es de error
                                     if (aiResponse.isNotBlank() && !aiResponse.startsWith("⚠️")) {
                                         saveMessage(it, aiResponse, "ia")
 
-                                        // Ahora sí, decrementamos el token
-                                        val success = decrementToken(it)
-                                        if (success) {
-                                            tokens = tokens!! - 1
-                                            if (tokens == 0){
-                                                val activity = context as? Activity
-                                                val ad = adViewModel.aichatInterstitialAd
+                                        // Solo restar si NO es infinito
+                                        if (tokens != 999) {
+                                            val success = decrementToken(it)
+                                            if (success) {
+                                                tokens = tokens!! - 1
+                                                if (tokens == 0) {
+                                                    val activity = context as? Activity
+                                                    val ad = adViewModel.aichatInterstitialAd
 
-                                                if ( ad != null && activity != null) {
-                                                    ad.fullScreenContentCallback =
-                                                        object : FullScreenContentCallback() {
-                                                            override fun onAdDismissedFullScreenContent() {
-                                                                adViewModel.clearAIChatAd()
-                                                                adViewModel.loadAiChatAd()
+                                                    if (ad != null && activity != null) {
+                                                        ad.fullScreenContentCallback =
+                                                            object : FullScreenContentCallback() {
+                                                                override fun onAdDismissedFullScreenContent() {
+                                                                    adViewModel.clearAIChatAd()
+                                                                    adViewModel.loadAiChatAd()
+                                                                }
                                                             }
-                                                        }
-                                                    ad.show(activity)
+                                                        ad.show(activity)
+                                                    }
                                                 }
+                                            } else {
+                                                Toast.makeText(context, "⚠️ Error al restar token", Toast.LENGTH_SHORT).show()
                                             }
-                                        } else {
-                                            Toast.makeText(context, "⚠️ Error al restar token", Toast.LENGTH_SHORT).show()
                                         }
 
-                                        // Scroll después de guardar respuesta
                                         delay(100)
                                         listState.animateScrollToItem(messages.size + 2)
                                     } else {
@@ -251,6 +277,41 @@ fun AIChat(
                     }
                 }
             )
+        }
+    }
+}
+
+@Composable
+fun NoTokensMessage(
+    tokenRenewal: String?,
+    onUpgradeClick: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = buildString {
+                append("No te quedan tokens. Puedes volver a interactuar con la IA cuando se renueven tus tokens, el dia: ")
+                append(tokenRenewal ?: "desconocido")
+                append(". O mejorar tu plan.")
+            },
+            color = Color(0xFFFF4C4C), // rojo más intenso
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 16.dp)
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Button(
+            onClick = { onUpgradeClick() },
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF5A4F8D))
+        ) {
+            Text("Mejorar plan", color = Color.White)
         }
     }
 }

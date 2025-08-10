@@ -3,15 +3,23 @@ package com.carlosrmuji.detoxapp
 import android.app.Application
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
 import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.interstitial.InterstitialAd
 import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.ktx.firestore
+import com.google.firebase.ktx.Firebase
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 class AdViewModel(application: Application) : AndroidViewModel(application) {
 
     private val context = application.applicationContext
     private val adRequest = AdRequest.Builder().build()
+    private val firestore = Firebase.firestore
+    private val auth = FirebaseAuth.getInstance()
 
     private var _homeInterstitialAd: InterstitialAd? = null
     private var _editProfileInterstitialAd: InterstitialAd? = null
@@ -19,22 +27,45 @@ class AdViewModel(application: Application) : AndroidViewModel(application) {
     private var _joinOrCreateGroupInterstitialAd: InterstitialAd? = null
     private var _aichatInterstitialAd: InterstitialAd? = null
 
-    val homeInterstitialAd: InterstitialAd?
-        get() = _homeInterstitialAd
-
-    val editProfileInterstitialAd: InterstitialAd?
-        get() = _editProfileInterstitialAd
-
-    val messageSaveInterstitialAd: InterstitialAd?
-        get() = _messageSaveInterstitialAd
-
-    val joinOrCreateGroupInterstitialAd: InterstitialAd?
-        get() = _joinOrCreateGroupInterstitialAd
-
-    val aichatInterstitialAd: InterstitialAd?
-        get() = _aichatInterstitialAd
+    val homeInterstitialAd: InterstitialAd? get() = _homeInterstitialAd
+    val editProfileInterstitialAd: InterstitialAd? get() = _editProfileInterstitialAd
+    val messageSaveInterstitialAd: InterstitialAd? get() = _messageSaveInterstitialAd
+    val joinOrCreateGroupInterstitialAd: InterstitialAd? get() = _joinOrCreateGroupInterstitialAd
+    val aichatInterstitialAd: InterstitialAd? get() = _aichatInterstitialAd
 
     init {
+        viewModelScope.launch {
+            checkUserPlanAndLoadAds()
+        }
+    }
+
+    private suspend fun checkUserPlanAndLoadAds() {
+        val userId = auth.currentUser?.uid ?: return
+        try {
+            val planSnapshot = firestore
+                .collection("users")
+                .document(userId)
+                .collection("plan")
+                .document("plan")
+                .get()
+                .await()
+
+            val userPlan = planSnapshot.getString("plan") ?: "base_plan"
+
+            if (userPlan == "base_plan") {
+                loadAllAds()
+            } else {
+                clearAllAds()
+            }
+
+        } catch (e: Exception) {
+            Log.e("AdViewModel", "Error fetching user plan: ${e.message}")
+            // Si falla, mejor no cargar anuncios por precaución
+            clearAllAds()
+        }
+    }
+
+    fun loadAllAds() {
         loadHomeAd()
         loadEditProfileAd()
         loadMessageSaveAd()
@@ -42,37 +73,26 @@ class AdViewModel(application: Application) : AndroidViewModel(application) {
         loadAiChatAd()
     }
 
+    fun clearAllAds() {
+        _homeInterstitialAd = null
+        _editProfileInterstitialAd = null
+        _messageSaveInterstitialAd = null
+        _joinOrCreateGroupInterstitialAd = null
+        _aichatInterstitialAd = null
+    }
+
     fun loadHomeAd() {
         InterstitialAd.load(
             context,
-            "ca-app-pub-7055736346592282/7121992255", // AdUnitID para HomeScreen
+            "ca-app-pub-7055736346592282/7121992255",
             adRequest,
             object : InterstitialAdLoadCallback() {
                 override fun onAdLoaded(ad: InterstitialAd) {
                     _homeInterstitialAd = ad
-                    Log.d("AdViewModel", "Home Interstitial Ad loaded")
                 }
 
-                override fun onAdFailedToLoad(adError: LoadAdError) {
+                override fun onAdFailedToLoad(error: LoadAdError) {
                     _homeInterstitialAd = null
-                    Log.e("AdViewModel", "Home Interstitial Ad failed to load: ${adError.message}")
-                }
-            }
-        )
-    }
-
-    fun loadCreateOrJoinGroupAd(){
-        InterstitialAd.load(
-            context,
-            "ca-app-pub-7055736346592282/6573357608",
-            adRequest,
-            object : InterstitialAdLoadCallback(){
-                override fun onAdLoaded(ad: InterstitialAd){
-                    _joinOrCreateGroupInterstitialAd = ad
-                }
-
-                override fun onAdFailedToLoad(p0: LoadAdError) {
-                    _joinOrCreateGroupInterstitialAd = null
                 }
             }
         )
@@ -81,17 +101,15 @@ class AdViewModel(application: Application) : AndroidViewModel(application) {
     fun loadEditProfileAd() {
         InterstitialAd.load(
             context,
-            "ca-app-pub-7055736346592282/6138468670", // AdUnitID para EditProfile
+            "ca-app-pub-7055736346592282/6138468670",
             adRequest,
             object : InterstitialAdLoadCallback() {
                 override fun onAdLoaded(ad: InterstitialAd) {
                     _editProfileInterstitialAd = ad
-                    Log.d("AdViewModel", "EditProfile Interstitial Ad loaded")
                 }
 
-                override fun onAdFailedToLoad(adError: LoadAdError) {
+                override fun onAdFailedToLoad(error: LoadAdError) {
                     _editProfileInterstitialAd = null
-                    Log.e("AdViewModel", "EditProfile Interstitial Ad failed to load: ${adError.message}")
                 }
             }
         )
@@ -100,17 +118,32 @@ class AdViewModel(application: Application) : AndroidViewModel(application) {
     fun loadMessageSaveAd() {
         InterstitialAd.load(
             context,
-            "ca-app-pub-7055736346592282/6789205369", // AdUnitID para guardar mensaje
+            "ca-app-pub-7055736346592282/6789205369",
             adRequest,
             object : InterstitialAdLoadCallback() {
                 override fun onAdLoaded(ad: InterstitialAd) {
                     _messageSaveInterstitialAd = ad
-                    Log.d("AdViewModel", "MessageSave Interstitial Ad loaded")
                 }
 
-                override fun onAdFailedToLoad(adError: LoadAdError) {
+                override fun onAdFailedToLoad(error: LoadAdError) {
                     _messageSaveInterstitialAd = null
-                    Log.e("AdViewModel", "MessageSave Interstitial Ad failed to load: ${adError.message}")
+                }
+            }
+        )
+    }
+
+    fun loadCreateOrJoinGroupAd() {
+        InterstitialAd.load(
+            context,
+            "ca-app-pub-7055736346592282/6573357608",
+            adRequest,
+            object : InterstitialAdLoadCallback() {
+                override fun onAdLoaded(ad: InterstitialAd) {
+                    _joinOrCreateGroupInterstitialAd = ad
+                }
+
+                override fun onAdFailedToLoad(error: LoadAdError) {
+                    _joinOrCreateGroupInterstitialAd = null
                 }
             }
         )
@@ -119,37 +152,24 @@ class AdViewModel(application: Application) : AndroidViewModel(application) {
     fun loadAiChatAd() {
         InterstitialAd.load(
             context,
-            "ca-app-pub-7055736346592282/4705356095", // AdUnitID para guardar mensaje
+            "ca-app-pub-7055736346592282/4705356095",
             adRequest,
             object : InterstitialAdLoadCallback() {
                 override fun onAdLoaded(ad: InterstitialAd) {
                     _aichatInterstitialAd = ad
-                    Log.d("AdViewModel", "AIChat Interstitial Ad loaded")
                 }
 
-                override fun onAdFailedToLoad(adError: LoadAdError) {
+                override fun onAdFailedToLoad(error: LoadAdError) {
                     _aichatInterstitialAd = null
-                    Log.e("AdViewModel", "AIChat Interstitial Ad failed to load: ${adError.message}")
                 }
             }
         )
     }
 
-    fun clearHomeAd() {
-        _homeInterstitialAd = null
-    }
-
-    fun clearEditProfileAd() {
-        _editProfileInterstitialAd = null
-    }
-
-    fun clearMessageSaveAd() {
-        _messageSaveInterstitialAd = null
-    }
-    fun clearCreateOrJoinAd(){
-        _joinOrCreateGroupInterstitialAd = null
-    }
-    fun clearAIChatAd(){
-        _aichatInterstitialAd = null
-    }
+    // Métodos manuales si los necesitas
+    fun clearHomeAd() { _homeInterstitialAd = null }
+    fun clearEditProfileAd() { _editProfileInterstitialAd = null }
+    fun clearMessageSaveAd() { _messageSaveInterstitialAd = null }
+    fun clearCreateOrJoinAd() { _joinOrCreateGroupInterstitialAd = null }
+    fun clearAIChatAd() { _aichatInterstitialAd = null }
 }

@@ -37,22 +37,24 @@
 
         <!-- Contenido detallado -->
         <TextView
-            android:id="@+id/terms_content"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:textIsSelectable="true"
-            android:textSize="14sp"
-            android:textColor="@android:color/black"
-            android:lineSpacingExtra="4dp"
-            android:text="
+    android:id="@+id/terms_content"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:textIsSelectable="true"
+    android:textSize="14sp"
+    android:textColor="@android:color/black"
+    android:lineSpacingExtra="4dp"
+    android:text="
 1. Datos que recopilamos:
 • Tiempo total de pantalla encendida.
 • Número de desbloqueos diarios.
 • Tiempo de uso por aplicación.
 • Progreso de cada fase del reto (porcentaje de reducción).
+• Mensajes enviados por el usuario a la inteligencia artificial integrada (ChatGPT).
 
 2. Uso de la información:
-Los datos sirven para generar gráficos y estadísticas personalizadas de tu uso, y para evaluar tu progreso semanal según el porcentaje de reducción acordado con tu grupo de reto.
+• Los datos sirven para generar gráficos y estadísticas personalizadas de tu uso, y para evaluar tu progreso semanal según el porcentaje de reducción acordado con tu grupo de reto.
+• Los mensajes que escribas en el chat de la IA serán enviados a los servidores de OpenAI (ChatGPT) para generar una respuesta, la cual se te mostrará en la aplicación. Estos mensajes se procesan únicamente con el fin de responder a tu consulta.
 
 3. Fases del reto de grupo:
 • Fase 1 (5 días): retos iniciales pequeños mientras la app recopila tus primeros datos de uso. Siempre pasarás a la siguiente fase tras 5 días.
@@ -65,12 +67,21 @@ Los datos sirven para generar gráficos y estadísticas personalizadas de tu uso
 4. Colaboración en el reto:
 Los miembros del grupo de reto pueden ver tu fase actual, tiempo medio de uso, nombre y porcentaje de cambio semanal. También disponen de un muro para publicar reflexiones diarias sobre avances y dificultades.
 
-5. Privacidad y almacenamiento:
-Los datos de uso y de grupo se almacenan localmente y en Firebase para sincronizar el progreso entre dispositivos. No compartimos tu información con terceros. Puedes eliminarla desinstalando la app o desde la configuración interna.
+5. Función de restricción por franjas horarias:
+Puedes establecer horarios específicos durante los cuales determinadas aplicaciones no estarán disponibles. Ejemplo: bloquear Instagram los martes y jueves de 6:00 a 8:00. Fuera de esos horarios, el uso será libre.
 
-6. Aceptación:
+6. Planes y límites de uso:
+• Plan gratuito: 5 tokens a la semana (1 token = 1 interacción con la IA), restricción de hasta 2 aplicaciones y anuncios.
+• Plan Plus (2,99 €/mes): 25 tokens a la semana, restricción de hasta 5 aplicaciones y sin anuncios.
+• Plan Premium (4,99 €/mes): tokens ilimitados, restricciones ilimitadas y sin anuncios.
+Nota: Los tokens se renuevan semanalmente según el plan contratado.
+
+7. Privacidad y almacenamiento:
+Los datos de uso, restricciones configuradas, interacciones con la IA y datos de grupo se almacenan localmente y en Firebase para sincronizar el progreso entre dispositivos. No compartimos tu información con terceros ajenos a los servicios necesarios (por ejemplo, OpenAI para el funcionamiento del chat con la IA). Puedes eliminar todos tus datos desinstalando la app o desde la configuración interna.
+
+8. Aceptación:
 Al pulsar “Aceptar y continuar”, confirmas que has leído y aceptado estos términos y autorizas a DetoxApp a recopilar y procesar tus datos según lo descrito."
-            />
+/>
 
         <!-- Botón de aceptar -->
         <Button

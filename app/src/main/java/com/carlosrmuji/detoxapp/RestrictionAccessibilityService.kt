@@ -59,7 +59,7 @@ class BlockedAppActivity : Activity() {
         val nextAvailable = RestrictionChecker.getNextAvailableTime(this, packageName)
 
         val blockMessage = findViewById<TextView>(R.id.block_message)
-        blockMessage.text = "No puedes usar $appName en este momento. \n\nEstará disponible a las $nextAvailable."
+        blockMessage.text = "No puedes usar $appName en este momento. \n\nEstará disponible a partir de las $nextAvailable."
 
         val appIconView = findViewById<ImageView>(R.id.app_icon)
         try {
