@@ -29,6 +29,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
@@ -55,8 +56,11 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.tasks.await
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.ZoneId
+import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import java.time.format.TextStyle
@@ -80,6 +84,8 @@ fun Messages(
 
     val listState = rememberLazyListState()
     val context = LocalContext.current
+    var isLoading by remember { mutableStateOf(true) }
+    var isSending by remember { mutableStateOf(false) }
 
     val focusRequester = remember { FocusRequester() }
 
@@ -92,6 +98,8 @@ fun Messages(
 
     // Cargar mensajes desde Firestore
     LaunchedEffect(Unit) {
+        isLoading = true
+
         val groupDoc = db.collection("groups").document(groupId).get().await()
         val membersMap = groupDoc.get("members") as? Map<String, Map<String, Any>> ?: emptyMap()
         val allMessages = mutableListOf<Message>()
@@ -116,13 +124,27 @@ fun Messages(
             }
         }
 
-        messages = allMessages.sortedBy { it.timestamp }
-
-        val today = LocalDate.now().format(DateTimeFormatter.ISO_DATE)
-        reflectionDoneToday = messages.any { msg ->
-            msg.userId == currentUserId && getDateKey(msg.timestamp) == today
+        // 🔹 Ordenar cronológicamente con Instant (UTC consistente)
+        messages = allMessages.sortedBy { msg ->
+            runCatching { Instant.parse(msg.timestamp) }.getOrNull() ?: Instant.EPOCH
         }
+
+        // 🔹 Detectar si el usuario ya escribió hoy (comparando en horario español)
+        val spainZone = ZoneId.of("Europe/Madrid")
+        val todaySpain = LocalDate.now(spainZone)
+
+        reflectionDoneToday = messages.any { msg ->
+            msg.userId == currentUserId &&
+                    runCatching {
+                        val instant = Instant.parse(msg.timestamp)
+                        val msgDateSpain = instant.atZone(spainZone).toLocalDate()
+                        msgDateSpain.isEqual(todaySpain)
+                    }.getOrDefault(false)
+        }
+
+        isLoading = false
     }
+
 
     LaunchedEffect(messages) {
         if (messages.isNotEmpty()) {
@@ -152,159 +174,188 @@ fun Messages(
                 .fillMaxWidth()
                 .padding(horizontal = 8.dp),
         ) {
-            if (messages.isEmpty()) {
-                Text(
-                    text = "No hay reflexiones aún en este grupo.\n\n" +
-                            "Comparte con los miembros del grupo alguna dificultad que hayas tenido " +
-                            "para reducir el uso del móvil, algún beneficio que hayas notado gracias a usarlo menos, " +
-                            "o algo que hayas hecho en lugar de perder el tiempo con el móvil.\n\n" +
-                            "¡Sé el primero en escribir una reflexión!",
-                    color = Color.White,
-                    fontSize = 16.sp,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .padding(16.dp)
-                )
-            } else {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    val shownDates = mutableSetOf<String>()
-                    items(messages) { msg ->
-                        val dateKey = getDateKey(msg.timestamp)
-                        if (dateKey !in shownDates) {
-                            shownDates.add(dateKey)
-                            DateSeparator(getFormattedDate(msg.timestamp))
-                        }
-                        MessageBubble(
-                            message = msg,
-                            isCurrentUser = msg.userId == currentUserId,
-                            onEdit = { message ->
-                                inputText = message.text
-                                editingMessage = message
-                            },
-                            onDelete = { message ->
-                                db.collection("users")
-                                    .document(currentUserId)
-                                    .collection("groups")
-                                    .document(groupId)
-                                    .collection("messages")
-                                    .document(message.id)
-                                    .delete()
-                                    .addOnSuccessListener {
-                                        messages = messages.filter { it.id != message.id }
-                                        reflectionDoneToday = false
-                                    }
+
+            when {
+                isLoading -> {
+                    CircularProgressIndicator(
+                        color = Color.White,
+                        modifier = Modifier.align(Alignment.Center)
+                    )
+                }
+
+                messages.isEmpty() -> {
+                    Text(
+                        text = "No hay reflexiones aún en este grupo.\n\n" +
+                                "Comparte con los miembros del grupo alguna dificultad que hayas tenido " +
+                                "para reducir el uso del móvil, algún beneficio que hayas notado gracias a usarlo menos, " +
+                                "o algo que hayas hecho en lugar de perder el tiempo con el móvil.\n\n" +
+                                "¡Sé el primero en escribir una reflexión!",
+                        color = Color.White,
+                        fontSize = 16.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .padding(16.dp)
+                    )
+                }
+
+                else -> {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        val shownDates = mutableSetOf<String>()
+                        items(messages) { msg ->
+                            val dateKey = getDateKey(msg.timestamp)
+                            if (dateKey !in shownDates) {
+                                shownDates.add(dateKey)
+                                DateSeparator(getFormattedDate(msg.timestamp))
                             }
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
+                            MessageBubble(
+                                message = msg,
+                                isCurrentUser = msg.userId == currentUserId,
+                                onEdit = { message ->
+                                    inputText = message.text
+                                    editingMessage = message
+                                },
+                                onDelete = { message ->
+                                    db.collection("users")
+                                        .document(currentUserId)
+                                        .collection("groups")
+                                        .document(groupId)
+                                        .collection("messages")
+                                        .document(message.id)
+                                        .delete()
+                                        .addOnSuccessListener {
+                                            messages = messages.filter { it.id != message.id }
+                                            reflectionDoneToday = false
+                                        }
+                                }
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
                     }
                 }
             }
         }
 
-        Divider(color = Color.DarkGray, thickness = 1.dp)
+        if (isLoading != true) {
 
-        // Input de mensaje o edición
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(Color.Black)
-                .padding(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            TextField(
-                value = inputText,
-                onValueChange = { if (!reflectionDoneToday || editingMessage != null) inputText = it },
+            Divider(color = Color.DarkGray, thickness = 1.dp)
+
+
+            // Input de mensaje o edición
+            Row(
                 modifier = Modifier
-                    .weight(1f)
-                    .heightIn(min = 56.dp)
-                    .focusRequester(focusRequester),
-                enabled = !reflectionDoneToday || editingMessage != null,
-                colors = TextFieldDefaults.textFieldColors(
-                    textColor = Color.White,
-                    backgroundColor = Color(0xFF1F1F1F),
-                    disabledTextColor = Color.Gray,
-                    disabledIndicatorColor = Color.Transparent
-                ),
-                placeholder = {
-                    Text(
-                        if (editingMessage != null) "Edita tu reflexión..." else "Escribe tu reflexión...",
-                        color = Color.White
-                    )
-                }
-            )
+                    .fillMaxWidth()
+                    .background(Color.Black)
+                    .padding(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                TextField(
+                    value = inputText,
+                    onValueChange = {
+                        if (!reflectionDoneToday && !isSending || editingMessage != null) inputText =
+                            it
+                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 56.dp)
+                        .focusRequester(focusRequester),
+                    enabled = !reflectionDoneToday || editingMessage != null,
+                    colors = TextFieldDefaults.textFieldColors(
+                        textColor = Color.White,
+                        backgroundColor = Color(0xFF1F1F1F),
+                        disabledTextColor = Color.Gray,
+                        disabledIndicatorColor = Color.Transparent
+                    ),
+                    placeholder = {
+                        Text(
+                            when {
+                                editingMessage != null -> "Edita tu reflexión..."
+                                reflectionDoneToday -> "Ya has escrito tu reflexión diaria" // 🔹 mensaje bloqueado
+                                else -> "Escribe tu reflexión..."
+                            },
+                            color = Color.White
+                        )
+                    }
+                )
 
-            IconButton(
-                onClick = {
-                    if (inputText.isNotBlank()) {
-                        if (editingMessage != null) {
-                            // Guardar edición
-                            val msg = editingMessage!!
-                            db.collection("users")
-                                .document(currentUserId)
-                                .collection("groups")
-                                .document(groupId)
-                                .collection("messages")
-                                .whereEqualTo("id", msg.id)
-                                .get()
-                                .addOnSuccessListener { snapshot ->
-                                    snapshot.documents.forEach {
-                                        it.reference.update("text", inputText)
+                IconButton(
+                    onClick = {
+                        if (inputText.isNotBlank()) {
+                            isSending = true
+                            if (editingMessage != null) {
+                                // Guardar edición
+                                val msg = editingMessage!!
+                                db.collection("users")
+                                    .document(currentUserId)
+                                    .collection("groups")
+                                    .document(groupId)
+                                    .collection("messages")
+                                    .whereEqualTo("id", msg.id)
+                                    .get()
+                                    .addOnSuccessListener { snapshot ->
+                                        snapshot.documents.forEach {
+                                            it.reference.update("text", inputText)
+                                        }
+                                        messages = messages.map {
+                                            if (it.id == msg.id) it.copy(text = inputText) else it
+                                        }
+                                        inputText = ""
+                                        editingMessage = null
+                                        isSending = false
                                     }
-                                    messages = messages.map {
-                                        if (it.id == msg.id) it.copy(text = inputText) else it
-                                    }
-                                    inputText = ""
-                                    editingMessage = null
-                                }
-                        } else {
-                            // Crear nuevo mensaje
-                            val timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
-                            val messageId = UUID.randomUUID().toString()
-                            val newMessage = mapOf(
-                                "id" to messageId,
-                                "userId" to currentUserId,
-                                "timestamp" to timestamp,
-                                "text" to inputText
-                            )
+                            } else {
+                                // Crear nuevo mensaje
+                                val spainZone = ZoneId.of("Europe/Madrid")
+                                val nowSpain = ZonedDateTime.now(spainZone)
+                                val timestamp = nowSpain.toInstant().toString()
 
-                            val userMessagesRef = db.collection("users")
-                                .document(currentUserId)
-                                .collection("groups")
-                                .document(groupId)
-                                .collection("messages")
-                                .document(messageId)
-
-                            userMessagesRef.set(newMessage).addOnSuccessListener {
-                                messages = messages + Message(
-                                    id = newMessage["id"] as String,
-                                    userId = currentUserId,
-                                    timestamp = timestamp,
-                                    text = inputText,
-                                    name = "Tú"
+                                val messageId = UUID.randomUUID().toString()
+                                val newMessage = mapOf(
+                                    "id" to messageId,
+                                    "userId" to currentUserId,
+                                    "timestamp" to timestamp,
+                                    "text" to inputText
                                 )
-                                reflectionDoneToday = true
-                                inputText = ""
 
-                                adViewModel.messageSaveInterstitialAd?.let { ad ->
-                                    ad.show(context as Activity)
-                                    adViewModel.clearMessageSaveAd()
-                                    adViewModel.loadMessageSaveAd()
+                                val userMessagesRef = db.collection("users")
+                                    .document(currentUserId)
+                                    .collection("groups")
+                                    .document(groupId)
+                                    .collection("messages")
+                                    .document(messageId)
+
+                                userMessagesRef.set(newMessage).addOnSuccessListener {
+                                    messages = messages + Message(
+                                        id = newMessage["id"] as String,
+                                        userId = currentUserId,
+                                        timestamp = timestamp,
+                                        text = inputText,
+                                        name = "Tú"
+                                    )
+                                    reflectionDoneToday = true
+                                    inputText = ""
+                                    isSending = false
+
+                                    adViewModel.messageSaveInterstitialAd?.let { ad ->
+                                        ad.show(context as Activity)
+                                        adViewModel.clearMessageSaveAd()
+                                        adViewModel.loadMessageSaveAd()
+                                    }
                                 }
                             }
                         }
-                    }
-                },
-                enabled = !reflectionDoneToday || editingMessage != null
-            ) {
-                Icon(
-                    imageVector = if (editingMessage != null) Icons.Default.Check else Icons.Default.Send,
-                    contentDescription = if (editingMessage != null) "Guardar" else "Enviar",
-                    tint = if (!reflectionDoneToday || editingMessage != null) Color.White else Color.Gray
-                )
+                    },
+                    enabled = !reflectionDoneToday || editingMessage != null
+                ) {
+                    Icon(
+                        imageVector = if (editingMessage != null) Icons.Default.Check else Icons.Default.Send,
+                        contentDescription = if (editingMessage != null) "Guardar" else "Enviar",
+                        tint = if (!reflectionDoneToday || editingMessage != null) Color.White else Color.Gray
+                    )
+                }
             }
         }
     }
@@ -454,11 +505,14 @@ fun DateSeparator(dateText: String) {
 
 fun getFormattedDate(timestamp: String): String {
     return try {
-        val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
-        val dateTime = LocalDateTime.parse(timestamp, formatter)
-        val date = dateTime.toLocalDate()
-        val today = LocalDate.now()
+
+        val instant = Instant.parse(timestamp)          // lo guardado en UTC
+        val userZone = ZoneId.systemDefault()           // zona del usuario
+        val userDateTime = instant.atZone(userZone)
+
+        val today = LocalDate.now(userZone)
         val yesterday = today.minusDays(1)
+        val date = userDateTime.toLocalDate()
 
         when {
             date.isEqual(today) -> "Hoy"
@@ -471,26 +525,28 @@ fun getFormattedDate(timestamp: String): String {
 }
 
 
-fun getDateKey(timestamp: String): String {
-    return try {
-        val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
-        val dateTime = LocalDateTime.parse(timestamp, formatter)
-        dateTime.toLocalDate().format(DateTimeFormatter.ISO_DATE) // yyyy-MM-dd
-    } catch (e: Exception) {
-        timestamp.substringBefore(" ") // fallback rápido
-    }
-}
-
-// Hora de cada mensaje (parte inferior del globo)
 fun formatHour(timestamp: String): String {
     return try {
-        val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
-        val dateTime = LocalDateTime.parse(timestamp, formatter)
-        dateTime.format(DateTimeFormatter.ofPattern("HH:mm"))
+        val instant = Instant.parse(timestamp)
+        val userZone = ZoneId.systemDefault()
+        val userDateTime = instant.atZone(userZone)
+        userDateTime.format(DateTimeFormatter.ofPattern("HH:mm"))
     } catch (e: Exception) {
         ""
     }
 }
+
+fun getDateKey(timestamp: String): String {
+    return try {
+        val instant = Instant.parse(timestamp)
+        val userZone = ZoneId.systemDefault()
+        val userDate = instant.atZone(userZone).toLocalDate()
+        userDate.format(DateTimeFormatter.ISO_DATE)
+    } catch (e: Exception) {
+        timestamp.substringBefore(" ")
+    }
+}
+
 
 // Color aleatorio basado en userId (determinístico)
 fun getColorForUser(userId: String): Color {

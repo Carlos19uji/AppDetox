@@ -26,7 +26,7 @@ fun SplashScreen(navController: NavController, auth: FirebaseAuth) {
 
     LaunchedEffect(true) {
         if (currentUser != null) {
-            navController.navigate(Screen.Home.route) {
+            navController.navigate(Screen.Stats.route) {
                 popUpTo(Screen.Splash.route) { inclusive = true }
             }
         } else {

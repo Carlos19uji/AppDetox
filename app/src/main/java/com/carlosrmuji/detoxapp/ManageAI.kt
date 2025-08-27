@@ -10,36 +10,52 @@ import okhttp3.RequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 
-suspend fun callOpenAI(prompt: String): String {
+suspend fun callOpenAI(prompt: String, history: List<AIChatMessageData>): String {
     val client = OkHttpClient()
     val cloudFunctionUrl = "https://us-central1-detoxapp-b7f2d.cloudfunctions.net/callOpenAI"
+
+    val recentHistory = history.takeLast(2)
 
     // --- CAMBIO #1:
     // En lugar de enviar sólo { "prompt": prompt }, le pasamos al servidor TODO el array `messages`
     // con el mensaje de sistema + el mensaje de usuario.
     val json = JSONObject().apply {
         put("messages", JSONArray().apply {
-            // Mensaje de sistema: define el rol y comportamiento de la IA
+            // --- Mensaje de sistema ---
             put(JSONObject().apply {
                 put("role", "system")
-                put("content",
-                    """
-    Eres un experto que ayuda a las personas a reducir el uso del móvil y mejorar su relación con la tecnología. Solo debes responder preguntas relacionadas con el uso de pantallas, distracción digital, uso excesivo de aplicaciones, hábitos digitales, bienestar digital y temas similares.
+                put("content", """
+Eres un experto que ayuda a las personas a reducir el uso del móvil y mejorar su relación con la tecnología. Solo debes responder preguntas relacionadas con el uso de pantallas, distracción digital, uso excesivo de aplicaciones, hábitos digitales, bienestar digital y temas similares.
 
-    Si el usuario hace una pregunta que NO tiene relación con estos temas, responde amablemente con una frase muy breve (máximo 20 palabras), diciendo que solo puedes ayudar con temas relacionados con el uso del móvil.
+Si el usuario hace una pregunta que NO tiene relación con estos temas, responde amablemente con una frase muy breve (máximo 20 palabras), diciendo que solo puedes ayudar con temas relacionados con el uso del móvil.
 
-    Puedes hablar sobre cualquier aplicación que el usuario mencione (por ejemplo, TikTok, Instagram, YouTube, etc.). Pero bajo ningún concepto debes recomendar el uso de aplicaciones externas o de terceros para reducir el uso del móvil, ya que eso redirigiría al usuario fuera de esta app.
+Puedes hablar sobre cualquier aplicación que el usuario mencione (por ejemplo, TikTok, Instagram, YouTube, etc.). Pero bajo ningún concepto debes recomendar el uso de aplicaciones externas o de terceros para reducir el uso del móvil, ya que eso redirigiría al usuario fuera de esta app.
 
-    Esta app cuenta con una funcionalidad que permite restringir el uso de aplicaciones específicas durante los horarios definidos por el propio usuario. Puedes recomendar esta funcionalidad **solo si es claramente útil en el contexto de la consulta** (por ejemplo, si el usuario quiere reducir el uso de una app concreta como TikTok o necesita limitar su uso en ciertos momentos del día).
+Esta app cuenta con una funcionalidad que permite restringir el uso de aplicaciones específicas durante los horarios definidos por el propio usuario. Puedes recomendar esta funcionalidad **solo si es claramente útil en el contexto de la consulta** (por ejemplo, si el usuario quiere reducir el uso de una app concreta como TikTok o necesita limitar su uso en ciertos momentos del día).
 
-    Si mencionas esta funcionalidad, especifica que se trata de una función propia de esta app y que se puede encontrar haciendo clic en el icono de menú arriba a la derecha, en la opción “Restringir Apps”.
-    """.trimIndent()
-                )
+Si mencionas esta funcionalidad, especifica que se trata de una función propia de esta app y que se puede encontrar haciendo clic en el icono de menú arriba a la derecha, en la opción “Restringir Apps”.
+                """.trimIndent())
             })
-            // Mensaje del usuario: su prompt concreto
+
+            // --- Contexto explícito con los últimos mensajes ---
+            if (recentHistory.isNotEmpty()) {
+                put(JSONObject().apply {
+                    put("role", "system")
+                    put("content", buildString {
+                        append("Aquí tienes la consulta anterior del usuario y la respuesta que la IA le dio. Úsalas solo como contexto si es relevante:\n\n")
+                        recentHistory.forEach { msg ->
+                            append(if (msg.sender == "user") "Usuario: " else "IA: ")
+                            append(msg.text.trim())
+                            append("\n\n")
+                        }
+                    })
+                })
+            }
+
+            // --- Consulta actual ---
             put(JSONObject().apply {
                 put("role", "user")
-                put("content", prompt)
+                put("content", "Esta es la consulta actual del usuario a la que debes responder teniendo en cuenta todas las instrucciones anteriores: \n\n$prompt")
             })
         })
     }

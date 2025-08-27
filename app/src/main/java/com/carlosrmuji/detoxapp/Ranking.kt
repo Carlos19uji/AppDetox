@@ -6,6 +6,7 @@ import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -22,7 +23,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -105,6 +108,7 @@ fun Ranking(
     }
 
     var showInviteDialog by remember { mutableStateOf(false) }
+    var showInfoDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(groupId) {
         linkViewModel.loadInviteLink(context, groupId)
@@ -126,13 +130,38 @@ fun Ranking(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             item {
-                Text(
-                    text = "Ranking",
-                    color = Color.White,
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Icono de información pegado a la izquierda
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = "Info Ranking",
+                        modifier = Modifier
+                            .size(24.dp)
+                            .clickable { showInfoDialog = true },
+                        tint = Color.White
+                    )
+
+
+                    // Texto centrado usando un Box que ocupa todo el ancho disponible
+                    Box(
+                        modifier = Modifier
+                            .weight(1f), // ocupa el espacio restante
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Ranking",
+                            color = Color.White,
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
             }
 
             itemsIndexed(rankingList) { index, entry ->
@@ -230,6 +259,60 @@ fun Ranking(
                 },
                 groupId = groupId
             )
+        }
+
+        if (showInfoDialog){
+            InfoDialog(onDismiss = {showInfoDialog = false})
+        }
+    }
+}
+
+@Composable
+fun InfoDialog(onDismiss: () -> Unit) {
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = Color(0xFF1A1A1A),
+            modifier = Modifier
+                .padding(16.dp)
+                .fillMaxWidth()
+        ) {
+            Box {
+                Column(
+                    modifier = Modifier
+                        .padding(20.dp)
+                        .fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "Cómo se calcula el Ranking",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 20.sp,
+                        textAlign = TextAlign.Center
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text(
+                        text = "• La media diaria se calcula sumando el tiempo de uso de todas las aplicaciones durante los últimos 7 dias y dividiéndolo entre el número de dias con datos de uso registrados.\n" +
+                                "• El cambio de porcentaje muestra la variación respecto a la semana anterior.\n" +
+                                "• Flecha ↑ indica aumento y ↓ disminución en comparación con la semana pasada.",
+                        color = Color.LightGray,
+                        fontSize = 14.sp,
+                        textAlign = TextAlign.Start
+                    )
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    Button(
+                        onClick = onDismiss,
+                        colors = ButtonDefaults.buttonColors(Color(0xFF5A4F8D))
+                    ) {
+                        Text("Cerrar", color = Color.White)
+                    }
+                }
+            }
         }
     }
 }
@@ -387,7 +470,7 @@ fun InviteField(label: String, value: String, onCopy: () -> Unit) {
             )
             IconButton(onClick = onCopy) {
                 Icon(
-                    imageVector = Icons.Default.Edit,
+                    imageVector = Icons.Default.ContentCopy,
                     contentDescription = "Copiar",
                     tint = Color.White
                 )

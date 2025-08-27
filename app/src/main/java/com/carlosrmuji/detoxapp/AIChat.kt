@@ -149,6 +149,8 @@ fun AIChat(
         }
     }
 
+    val recentHistory = messages.takeLast(4)
+
     Surface(
         color = Color.Black,
         modifier = Modifier.fillMaxSize()
@@ -232,7 +234,7 @@ fun AIChat(
                                     delay(100)
                                     listState.animateScrollToItem(messages.size + 1)
 
-                                    val aiResponse = callOpenAI(userPrompt)
+                                    val aiResponse = callOpenAI(userPrompt, recentHistory)
 
                                     if (aiResponse.isNotBlank() && !aiResponse.startsWith("⚠️")) {
                                         saveMessage(it, aiResponse, "ia")

@@ -35,9 +35,10 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.billingclient.api.SkuDetails
-import com.example.detoxapp.BottomBar
+import com.example.detoxapp.BottomBarGroups
+import com.example.detoxapp.BottomBarIndividual
+import com.example.detoxapp.GroupTopBar
 import com.example.detoxapp.HomeTopBar
-import com.example.detoxapp.TopBarGroup
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.FirebaseFirestore
@@ -83,9 +84,11 @@ class BillingViewModel(application: Application) : AndroidViewModel(application)
     val purchaseStatus: State<String?> = _purchaseStatus
 
     init {
-        billingManager.onPlanUpdated = { plan ->
+        billingManager.onPlanUpdated = { plan, isNewPruchase ->
             _userPlan.value = plan
-            _purchaseStatus.value = "Compra exitosa: $plan"
+            if (isNewPruchase) {
+                _purchaseStatus.value = "Compra exitosa: $plan"
+            }
         }
 
         billingManager.onPurchaseError = { error ->
@@ -168,6 +171,15 @@ fun MainApp(
         }
     }
 
+    LaunchedEffect(billingViewModel.userPlan.value) {
+        val currentPlan = billingViewModel.userPlan.value
+        if (currentPlan == "base_plan") {
+            adViewModel.loadAllAds()
+        } else {
+            adViewModel.clearAllAds()
+        }
+    }
+
     // 3️⃣ Ahora sí, navegamos en cuanto firebaseUserState cambie a no-null
     LaunchedEffect(firebaseUserState.value) {
         if (firebaseUserState.value != null) {
@@ -193,46 +205,60 @@ fun MainApp(
             .fillMaxSize(),
         topBar = {
             val currentScreen = navController.currentBackStackEntryAsState().value?.destination?.route
-            when (currentScreen) {
-                in listOf(
+            if (currentScreen in listOf(
                     Screen.Home.route,
                     Screen.Stats.route,
+                    Screen.EditProfile.route,
+                    Screen.AIChat.route,
+                    Screen.AppBloq.route
+            )) {
+                HomeTopBar(
+                    navController = navController,
+                    auth = auth,
+                    modifier = Modifier.statusBarsPadding()
+                )
+            }
+
+            if ( currentScreen in listOf(
                     Screen.Messages.route,
                     Screen.Objectives.route,
                     Screen.Ranking.route,
                     Screen.Previa.route,
                     Screen.PhaseIntroScreen.route,
                     Screen.PhaseEndScreen.route,
-                    Screen.EditProfile.route,
-                    Screen.AIChat.route,
-                    Screen.AppBloq.route
-                ) -> {
-                    HomeTopBar(
-                        navController = navController,
-                        auth = auth,
-                        modifier = Modifier.statusBarsPadding()
-                    )
-                }
+            )){
+                GroupTopBar(navController, auth, modifier = Modifier.statusBarsPadding())
             }
         },
         bottomBar = {
             val currentScreen = navController.currentBackStackEntryAsState().value?.destination?.route
             if (currentScreen in listOf(
-                    Screen.AIChat.route,
-                    Screen.Stats.route,
                     Screen.Messages.route,
                     Screen.Objectives.route,
                     Screen.Ranking.route,
                     Screen.Previa.route,
                     Screen.PhaseIntroScreen.route,
                     Screen.PhaseEndScreen.route,
-                    Screen.EditProfile.route,
                 )
             ) {
-                BottomBar(
+                BottomBarGroups(
                     navController = navController,
                     groupViewModel = groupViewModel,
                     auth = auth,
+                    modifier = Modifier.navigationBarsPadding()
+                )
+            }
+
+            if (currentScreen in listOf(
+                    Screen.AIChat.route,
+                    Screen.Stats.route,
+                    Screen.EditProfile.route,
+                    Screen.AppBloq.route,
+                    Screen.Home.route
+                )
+            ) {
+                BottomBarIndividual(
+                    navController = navController,
                     modifier = Modifier.navigationBarsPadding()
                 )
             }

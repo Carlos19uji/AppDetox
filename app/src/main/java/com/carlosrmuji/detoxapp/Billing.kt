@@ -51,8 +51,10 @@ import com.android.billingclient.api.BillingClient
 import com.android.billingclient.api.BillingClientStateListener
 import com.android.billingclient.api.BillingFlowParams
 import com.android.billingclient.api.BillingResult
+import com.android.billingclient.api.PendingPurchasesParams
 import com.android.billingclient.api.ProductDetails
 import com.android.billingclient.api.Purchase
+import com.android.billingclient.api.PurchasesUpdatedListener
 import com.android.billingclient.api.QueryProductDetailsParams
 import com.android.billingclient.api.QueryPurchasesParams
 import com.android.billingclient.api.SkuDetails
@@ -70,20 +72,40 @@ class BillingManager(private val context: Context) {
 
     private val productIds = listOf("main_suscription") // NUEVO: ID de grupo de suscripción
 
-    var onPlanUpdated: ((String) -> Unit)? = null
+    var onPlanUpdated: ((String, Boolean) -> Unit)? = null
     var onPurchaseError: ((String) -> Unit)? = null
 
 
     fun startBillingClient(onQueryDone: (() -> Unit)? = null) {
         billingClient = BillingClient.newBuilder(context)
-            .enablePendingPurchases()
-            .setListener { billingResult, purchases ->
-                if (billingResult.responseCode == BillingClient.BillingResponseCode.OK && purchases != null) {
-                    for (purchase in purchases) {
-                        handlePurchase(purchase)
+            // En v8 es obligatorio pasar PendingPurchasesParams
+            .enablePendingPurchases(
+                PendingPurchasesParams.newBuilder()
+                    // opción recomendada por defecto — habilita compras one-time.
+                    .enableOneTimeProducts()
+                    // si necesitas soporte para planes prepagos: .enablePrepaidPlans()
+                    .build()
+            )
+            // Pasamos un PurchasesUpdatedListener explícito
+            .setListener(object : PurchasesUpdatedListener {
+                override fun onPurchasesUpdated(billingResult: BillingResult, purchases: MutableList<Purchase>?) {
+                    when (billingResult.responseCode) {
+                        BillingClient.BillingResponseCode.OK -> {
+                            if (purchases != null) {
+                                for (purchase in purchases) {
+                                    handlePurchase(purchase)
+                                }
+                            }
+                        }
+                        BillingClient.BillingResponseCode.USER_CANCELED -> {
+                            onPurchaseError?.invoke("Compra cancelada por el usuario")
+                        }
+                        else -> {
+                            onPurchaseError?.invoke("Error en compra: ${billingResult.debugMessage}")
+                        }
                     }
                 }
-            }
+            })
             .build()
 
         billingClient.startConnection(object : BillingClientStateListener {
@@ -91,11 +113,14 @@ class BillingManager(private val context: Context) {
                 if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
                     queryAvailablePlans()
                     queryActivePurchases(onQueryDone)
+                } else {
+                    Log.e("Billing", "Error inicializando BillingClient: ${billingResult.debugMessage}")
                 }
             }
 
             override fun onBillingServiceDisconnected() {
                 Log.e("Billing", "Servicio de facturación desconectado")
+                // puedes reintentar la conexión aquí si quieres
             }
         })
     }
@@ -112,9 +137,10 @@ class BillingManager(private val context: Context) {
             )
             .build()
 
-        billingClient.queryProductDetailsAsync(params) { billingResult, productDetailsList ->
+        billingClient.queryProductDetailsAsync(params) { billingResult, queryResult ->
             if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
-                this.productDetailsList = productDetailsList
+                // queryResult.productDetailsList es la List<ProductDetails>
+                this.productDetailsList = queryResult.productDetailsList
             } else {
                 Log.e("Billing", "Error consultando productos: ${billingResult.debugMessage}")
             }
@@ -191,7 +217,7 @@ class BillingManager(private val context: Context) {
         }
 
         Log.d("Billing", "✅ Plan final: $normalizedPlan")
-        saveUserPlan(normalizedPlan)
+        saveUserPlan(normalizedPlan, true)
     }
 
     private fun queryActivePurchases(onDone: (() -> Unit)? = null) {
@@ -202,7 +228,7 @@ class BillingManager(private val context: Context) {
         ) { billingResult, purchasesList ->
             if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
                 if (purchasesList.isEmpty()) {
-                    saveUserPlan("base_plan")
+                    saveUserPlan("base_plan", false)
                     onDone?.invoke()
                     return@queryPurchasesAsync
                 }
@@ -214,8 +240,7 @@ class BillingManager(private val context: Context) {
             onDone?.invoke()
         }
     }
-
-    fun saveUserPlan(plan: String) {
+    fun saveUserPlan(plan: String, isNewPurchase: Boolean) {
         val planNormalized = plan.lowercase().replace("-", "_")
         val userId = FirebaseAuth.getInstance().currentUser?.uid ?: return
         val firestore = FirebaseFirestore.getInstance()
@@ -304,7 +329,7 @@ class BillingManager(private val context: Context) {
             }
 
             // Notificar al ViewModel
-            onPlanUpdated?.invoke(planNormalized)
+            onPlanUpdated?.invoke(planNormalized, isNewPurchase)
         }.addOnFailureListener {
             Log.e("Billing", "❌ Error al leer tokens existentes: ${it.message}")
             // En caso de error leyendo tokens, guardamos todo como renovación
@@ -338,6 +363,7 @@ class BillingManager(private val context: Context) {
                     )
                 )
         }
+        onPlanUpdated?.invoke(planNormalized, isNewPurchase)
     }
 }
 

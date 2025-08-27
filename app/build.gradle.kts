@@ -14,9 +14,9 @@ android {
     defaultConfig {
         applicationId = "com.carlosrmuji.detoxapp"
         minSdk = 26
-        targetSdk = 34
-        versionCode = 5
-        versionName = "1.1.3"
+        targetSdk = 35
+        versionCode = 10
+        versionName = "1.3.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -111,7 +111,7 @@ dependencies {
     implementation("com.google.firebase:firebase-storage-ktx")
     implementation("com.google.firebase:firebase-messaging:23.0.0")
     implementation("com.google.android.gms:play-services-auth:20.7.0")
-    implementation("com.google.android.gms:play-services-auth:19.2.0")
+    implementation("androidx.security:security-crypto:1.1.0-alpha03")
 
     // Branch.io (Dynamic Links)
     implementation("io.branch.sdk.android:library:5.18.0")
@@ -124,7 +124,7 @@ dependencies {
     implementation("com.miui.referrer:homereferrer:1.0.0.7")
 
     // Billing y Ads
-    implementation("com.android.billingclient:billing:6.0.1")
+    implementation("com.android.billingclient:billing:8.0.0")
     implementation("com.google.android.gms:play-services-ads:22.6.0")
 
     // Otros

@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/blocked_layout"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#121212"
+    android:padding="32dp">
+
+    <!-- Icono de la app con fondo redondeado -->
+    <androidx.cardview.widget.CardView
+        android:id="@+id/app_icon_container"
+        android:layout_width="100dp"
+        android:layout_height="100dp"
+        app:cardCornerRadius="20dp"
+        app:cardElevation="8dp"
+        app:cardBackgroundColor="#1F1F1F"
+        app:layout_constraintTop_toTopOf="parent"
+        android:layout_marginTop="80dp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <ImageView
+            android:id="@+id/app_icon"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:contentDescription="Icono de la aplicación"
+            android:padding="12dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_launcher_foreground" />
+    </androidx.cardview.widget.CardView>
+
+    <!-- Icono de bloqueo grande y destacado -->
+    <ImageView
+        android:id="@+id/lock_icon"
+        android:layout_width="80dp"
+        android:layout_height="80dp"
+        android:layout_marginTop="32dp"
+        app:layout_constraintTop_toBottomOf="@id/app_icon_container"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:contentDescription="Bloqueado"
+        android:src="@drawable/ic_block"
+        app:tint="#FF5252" />
+
+    <!-- Mensaje explicativo -->
+    <TextView
+        android:id="@+id/block_message"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        app:layout_constraintTop_toBottomOf="@id/lock_icon"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:text="Has superado el tiempo máximo de uso permitido para esta aplicación hoy. Podras volver a usarla mañana."
+        android:textColor="#FFFFFF"
+        android:textSize="18sp"
+        android:gravity="center"
+        android:textAlignment="center"
+        android:lineSpacingExtra="4dp"
+        android:fontFamily="sans-serif-medium" />
+
+    <!-- Botón opcional para salir / cerrar pantalla -->
+    <Button
+        android:id="@+id/close_button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Cerrar"
+        android:textColor="#FFFFFF"
+        android:backgroundTint="#FF5252"
+        android:layout_marginTop="32dp"
+        app:layout_constraintTop_toBottomOf="@id/block_message"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:paddingStart="24dp"
+        android:paddingEnd="24dp"
+        android:paddingTop="12dp"
+        android:paddingBottom="12dp"
+        android:fontFamily="sans-serif-medium" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

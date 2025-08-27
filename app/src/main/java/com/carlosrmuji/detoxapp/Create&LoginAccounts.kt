@@ -1,5 +1,6 @@
 package com.carlosrmuji.detoxapp
 
+import android.content.Context
 import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.background
@@ -28,6 +29,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -48,6 +50,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import java.text.SimpleDateFormat
@@ -79,7 +83,7 @@ fun FirstScreen(onLoginClick: ()-> Unit, onCreateAccountClick: () -> Unit){
                 .fillMaxWidth(0.8f)
                 .padding(vertical = 8.dp)
         ) {
-            Text(text = "Log in", color = Color.White, fontSize = 18.sp)
+            Text(text = "Iniciar Sesion", color = Color.White, fontSize = 18.sp)
         }
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -92,7 +96,7 @@ fun FirstScreen(onLoginClick: ()-> Unit, onCreateAccountClick: () -> Unit){
                 .fillMaxWidth(0.8f)
                 .padding(vertical = 8.dp)
         ) {
-            Text(text = "Create account", color = Color.White, fontSize = 18.sp)
+            Text(text = "Crear Cuenta", color = Color.White, fontSize = 18.sp)
         }
     }
 }
@@ -108,6 +112,12 @@ fun LoginScreen(
     val emailState = remember { mutableStateOf("") }
     val passwordState = remember { mutableStateOf("") }
     val context = LocalContext.current
+
+    LaunchedEffect(Unit) {
+        val (savedEmail, savedPassword) = SecurePrefs.getCredentials(context)
+        emailState.value = savedEmail
+        passwordState.value = savedPassword
+    }
 
     Column(
         modifier = Modifier
@@ -129,6 +139,7 @@ fun LoginScreen(
                     auth.signInWithEmailAndPassword(emailState.value, passwordState.value)
                         .addOnCompleteListener { task ->
                             if (task.isSuccessful){
+                                SecurePrefs.saveCredentials(context, emailState.value, passwordState.value)
                                 navController.navigate(Screen.Home.route)
                             } else {
                                 Toast.makeText(
@@ -152,17 +163,17 @@ fun LoginScreen(
                 .fillMaxWidth(0.8f)
                 .padding(vertical = 8.dp)
         ) {
-            Text(text = "Log In", color = Color.White, fontSize = 18.sp)
+            Text(text = "Iniciar Sesion", color = Color.White, fontSize = 18.sp)
         }
 
         Spacer(modifier = Modifier.height(30.dp))
 
-        GoogleSignInButton("Log in with Google", onGoogleSignIn)
+        GoogleSignInButton("Inicio de sesion con Google", onGoogleSignIn)
 
         Spacer(modifier = Modifier.height(60.dp))
 
         Text(
-            text = "Don't have an account?",
+            text = "Todavia no tienes una cuenta?",
             fontSize = 18.sp,
             color = Color.White,
             modifier = Modifier.align(Alignment.CenterHorizontally)
@@ -171,13 +182,13 @@ fun LoginScreen(
 
         TextButton(onClick = onCreateAccountClick) {
             Text(
-                text = "Create Account",
+                text = "Crear Cuenta",
                 color = Color(0xFF888888), // Gris medio
                 fontSize = 18.sp
             )
         }
         TextButton(onClick = onForgotPasswordClick) {
-            Text(text = "Forgot your password?", color = Color(0xFF888888), fontSize = 18.sp)
+            Text(text = "Has olvidado tu contraseña?", color = Color(0xFF888888), fontSize = 18.sp)
         }
     }
 }
@@ -283,17 +294,17 @@ fun CreateAccount(
                 .fillMaxWidth(0.8f)
                 .padding(vertical = 8.dp)
         ) {
-            Text(text = "Create Account", color = Color.White, fontSize = 18.sp)
+            Text(text = "Crear Cuenta", color = Color.White, fontSize = 18.sp)
         }
 
         Spacer(modifier = Modifier.height(30.dp))
 
-        GoogleSignInButton("Sing in with Google", onGoogleSignIn)
+        GoogleSignInButton("Inicio de sesion con Google", onGoogleSignIn)
 
         Spacer(modifier = Modifier.height(60.dp))
 
         Text(
-            text = "Already have an account?",
+            text = "Ya tienes una cuenta?",
             fontSize = 18.sp,
             color = Color.White,
             modifier = Modifier.align(Alignment.CenterHorizontally)
@@ -302,7 +313,7 @@ fun CreateAccount(
 
         TextButton(onClick = { navController.navigate(Screen.Login.route) }) {
             Text(
-                text = "Log in",
+                text = "Iniciar Sesion",
                 color = Color(0xFF888888), // Gris medio
                 fontSize = 18.sp
             )
@@ -325,7 +336,7 @@ fun PasswordRecovery(auth: FirebaseAuth, navController: NavController){
         Spacer(modifier = Modifier.height(75.dp))
 
         Text(
-            text = "Enter your e-mail address to reset your password",
+            text = "Introduce tu email para recuperar tu contraseña",
             fontSize = 18.sp,
             color = Color.White,
             modifier = Modifier.align(Alignment.CenterHorizontally),
@@ -358,11 +369,11 @@ fun PasswordRecovery(auth: FirebaseAuth, navController: NavController){
             modifier = Modifier.padding(vertical = 8.dp)
                 .align(Alignment.CenterHorizontally)
         ) {
-            Text(text = "Send", color = Color.White, fontSize = 18.sp)
+            Text(text = "Enviar", color = Color.White, fontSize = 18.sp)
         }
         if (emailSent.value) {
             Text(
-                text = "Password reset email sent. Check your email",
+                text = "Email para recuperar tu contraseña enviado. Compruebe su email",
                 color = Color.White
             )
         }
@@ -374,7 +385,7 @@ fun PasswordRecovery(auth: FirebaseAuth, navController: NavController){
 
         TextButton(onClick = { navController.navigate(Screen.Login.route) }) {
             Text(
-                text = "Log in",
+                text = "Iniciar Sesion",
                 color = Color(0xFF888888), // Gris medio
                 fontSize = 18.sp
             )
@@ -487,7 +498,7 @@ fun password(passwordState: MutableState<String>) {
                     visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                     decorationBox = { innerTextField ->
                         if (passwordState.value.isEmpty()) {
-                            Text("Password", color = Color.LightGray)
+                            Text("Contraseña", color = Color.LightGray)
                         }
                         innerTextField()
                     }
@@ -505,4 +516,36 @@ fun password(passwordState: MutableState<String>) {
         }
     }
     Spacer(modifier = Modifier.height(12.dp))
+}
+
+object SecurePrefs{
+
+    private const val PREFS_FILENAME = "user_credentials"
+    private const val KEY_EMAIL = "email"
+    private const val KEY_PASSWORD = "password"
+
+    private fun getPrefs(context: Context) = EncryptedSharedPreferences.create(
+        context,
+        PREFS_FILENAME,
+        MasterKey.Builder(context).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build(),
+        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+    )
+
+    fun saveCredentials(context: Context, email: String, password: String){
+        val prefs = getPrefs(context)
+        prefs.edit().putString(KEY_EMAIL, email).putString(KEY_PASSWORD, password).apply()
+    }
+
+    fun getCredentials(context: Context): Pair<String, String>{
+        val prefs = getPrefs(context)
+        val email = prefs.getString(KEY_EMAIL, "") ?: ""
+        val password = prefs.getString(KEY_PASSWORD, "") ?: ""
+        return email to password
+    }
+
+    fun clearCredentials(context: Context){
+        val prefs = getPrefs(context)
+        prefs.edit().clear().apply()
+    }
 }

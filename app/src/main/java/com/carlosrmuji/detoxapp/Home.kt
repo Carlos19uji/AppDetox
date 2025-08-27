@@ -1,6 +1,7 @@
 package com.carlosrmuji.detoxapp
 
 import android.app.Activity
+import android.content.Context
 import android.util.Log
 import android.widget.Space
 import android.widget.Toast
@@ -18,12 +19,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.AlertDialog
 import androidx.compose.material.Button
 import androidx.compose.material.ButtonDefaults
 import androidx.compose.material.CircularProgressIndicator
+import androidx.compose.material.DropdownMenu
 import androidx.compose.material.Icon
 import androidx.compose.material.OutlinedButton
 import androidx.compose.material.OutlinedTextField
@@ -31,7 +34,10 @@ import androidx.compose.material.Text
 import androidx.compose.material.TextField
 import androidx.compose.material.TextFieldDefaults
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -45,6 +51,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -64,6 +71,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import com.google.android.gms.ads.AdRequest
+import com.google.firebase.firestore.FieldValue
 
 @Composable
 fun HomeScreen(navController: NavController,
@@ -90,6 +98,36 @@ fun HomeScreen(navController: NavController,
     var groups by remember { mutableStateOf<List<GroupData>>(emptyList()) }
     var showCreateDialog by remember { mutableStateOf(false) }
     var showJoinDialog by remember { mutableStateOf(false) }
+    var groupToLeave by remember { mutableStateOf<String?>(null) }
+
+    if (groupToLeave != null){
+        AlertDialog(
+            onDismissRequest = { groupToLeave = null },
+            title = { Text("Abandonar Grupo", color = Color.White) },
+            text = { Text("¿Seguro que quieres abandonar este grupo?", color = Color.White) },
+            confirmButton = {
+                Button(onClick = {
+                    groupToLeave?.let { gid ->
+                        leaveGroup(gid, userID, context){
+                            groupToLeave = null
+                            loadingState = true
+                            navController.navigate(Screen.Home.route){
+                                popUpTo(Screen.Home.route){ inclusive = true }
+                            }
+                        }
+                    }
+                }) {
+                    Text("Confirmar", color = Color.White)
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = {groupToLeave = null}) {
+                    Text("Cancelar", color= Color.Black)
+                }
+            },
+            backgroundColor = Color(0xFF222222)
+        )
+    }
 
     // Firestore loading
     LaunchedEffect(userID) {
@@ -205,7 +243,7 @@ fun HomeScreen(navController: NavController,
                             item {
                                 Box(
                                     modifier = Modifier
-                                        .fillMaxWidth(0.9f)
+                                        .fillMaxWidth(0.85f)
                                         .padding(vertical = 8.dp)
                                         .background(Color(0xFF444444), RoundedCornerShape(12.dp))
                                         .clickable {
@@ -215,18 +253,53 @@ fun HomeScreen(navController: NavController,
                                                 adViewModel.clearHomeAd()
                                                 adViewModel.loadHomeAd()
                                             }
-                                            navController.navigate(Screen.Stats.route) {
+                                            navController.navigate(Screen.Ranking.route) {
                                                 popUpTo(Screen.Home.route)
                                             }
                                         }
                                         .padding(16.dp)
                                 ) {
-                                    Text(
-                                        "Grupo: ${group.groupName}",
-                                        color = Color.White,
-                                        fontSize = 20.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
+
+                                    Row(
+                                       modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            "Grupo: ${group.groupName}",
+                                            color = Color.White,
+                                            fontSize = 20.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.weight(1f)
+                                        )
+
+                                        var expanded by remember { mutableStateOf(false) }
+
+                                        Box(modifier = Modifier.wrapContentSize()) {
+                                            IconButton(
+                                                onClick = { expanded = true }
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.MoreVert,
+                                                    contentDescription = "Opciones",
+                                                    tint = Color.White
+                                                )
+                                            }
+
+                                            DropdownMenu(
+                                                expanded = expanded,
+                                                onDismissRequest = { expanded = false },
+                                                offset = DpOffset(0.dp, 0.dp)
+                                            ) {
+                                                DropdownMenuItem(
+                                                    text = { Text("Abandonar grupo") },
+                                                    onClick = {
+                                                        expanded = false
+                                                        groupToLeave = group.groupID
+                                                    }
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -437,7 +510,7 @@ fun YourNameJoin(
 
                         withContext(Dispatchers.Main) {
                             groupViewModel.setGroupId(groupID)
-                            navController.navigate(Screen.Stats.route)
+                            navController.navigate(Screen.Ranking.route)
                         }
 
                     } catch (e: Exception) {
@@ -623,7 +696,7 @@ fun YourName(
                         }
 
                         groupViewModel.setGroupId(groupID)
-                        navController.navigate(Screen.Stats.route)
+                        navController.navigate(Screen.Ranking.route)
                     }.addOnFailureListener {
                         Toast.makeText(context, "Error al guardar en el usuario", Toast.LENGTH_SHORT).show()
                     }
@@ -637,5 +710,45 @@ fun YourName(
         ) {
             Text("¡Únete!", color = Color.White, fontSize = 18.sp)
         }
+    }
+}
+
+fun leaveGroup(groupID: String, userID: String, context: Context, onComplete: () -> Unit) {
+    val db = FirebaseFirestore.getInstance()
+    val groupRef = db.collection("groups").document(groupID)
+
+    groupRef.get().addOnSuccessListener { doc ->
+        if (doc.exists()) {
+            val members = doc.get("members") as? Map<String, Any> ?: emptyMap()
+
+            if (members.size <= 1) {
+                // Si solo queda este usuario, eliminar grupo completo
+                groupRef.delete().addOnSuccessListener {
+                    db.collection("users").document(userID)
+                        .collection("groups").document(groupID).delete()
+                        .addOnSuccessListener {
+                            Toast.makeText(context, "Grupo eliminado", Toast.LENGTH_SHORT).show()
+                            onComplete()
+                        }
+                }
+            } else {
+                // Si hay más miembros, solo eliminar al usuario
+                groupRef.update("members.$userID", FieldValue.delete())
+                    .addOnSuccessListener {
+                        db.collection("users").document(userID)
+                            .collection("groups").document(groupID).delete()
+                            .addOnSuccessListener {
+                                Toast.makeText(context, "Has salido del grupo", Toast.LENGTH_SHORT).show()
+                                onComplete()
+                            }
+                    }
+            }
+        } else {
+            Toast.makeText(context, "El grupo ya no existe", Toast.LENGTH_SHORT).show()
+            onComplete()
+        }
+    }.addOnFailureListener {
+        Toast.makeText(context, "Error al abandonar el grupo", Toast.LENGTH_SHORT).show()
+        onComplete()
     }
 }

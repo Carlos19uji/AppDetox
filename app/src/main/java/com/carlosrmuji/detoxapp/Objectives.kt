@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
@@ -71,6 +73,7 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
+import kotlin.math.max
 import kotlin.math.pow
 import kotlin.math.roundToInt
 
@@ -203,153 +206,188 @@ fun Objectives(
                 else -> null
             }
 
-            Column(
+            LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(16.dp)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text(
-                    text = "Retos de la Fase ${phase.value}",
-                    color = Color.White,
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.align(Alignment.CenterHorizontally)
-                )
-
-                Spacer(Modifier.height(32.dp))
-
-                Text(
-                    text = getPhaseObjective(phase.value, targetCurrent ?: 0).description,
-                    color = Color.White,
-                    fontSize = 16.sp,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Spacer(Modifier.weight(1f))
-
-                phaseChallenges.chunked(2).forEach { row ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = if (row.size == 1) Arrangement.Center else Arrangement.SpaceEvenly
-                    ) {
-                        row.forEachIndexed { _, challenge ->
-                            val idx = phaseChallenges.indexOf(challenge)
-                            ObjectiveCard(
-                                challenge = challenge,
-                                checked = challengeCheckList[idx] ?: false,
-                                onCheckedChange = { checked ->
-                                    challengeCheckList[idx] = checked
-                                    if (challenge.isManuallyCheckable) {
-                                        db.collection("users").document(userId)
-                                            .collection("groups").document(groupId)
-                                            .collection("phases").document("phase${phase.value}")
-                                            .collection("retos").document(challenge.title)
-                                            .set(mapOf("completed" to checked))
-                                    }
-                                },
-                                onClick = {
-                                    selectedChallenge.value = challenge
-                                    selectedIndex.value = idx
-                                    showDialog.value = true
-                                },
-                                onReflectionSaved = { reflectionSaved = it }
-                            )
-                        }
-                    }
-                    Spacer(Modifier.height(16.dp))
-                }
-
-                if (showDialog.value && selectedChallenge.value != null) {
-                    showChallengeDialog(
-                        challenge = selectedChallenge.value!!,
-                        onDismiss = { showDialog.value = false },
-                        auth = auth,
-                        groupViewModel = groupViewModel,
-                        navController = navController,
-                        adViewModel = adViewModel
+                item {
+                    Text(
+                        text = "Retos de la Fase ${phase.value}",
+                        color = Color.White,
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold
                     )
                 }
+
+                item {
+                    Text(
+                        text = getPhaseObjective(phase.value, targetCurrent ?: 0).description,
+                        color = Color.White,
+                        fontSize = 16.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                item {
+                    BoxWithConstraints(
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        val gap = 12.dp
+                        val factor = 0.8f
+                        val cellSize = (maxWidth - gap) / 2 * factor
+
+                        val rows = phaseChallenges.chunked(2)
+
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(gap)
+                        ) {
+                            rows.forEach { row ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(gap, Alignment.CenterHorizontally)
+                                ) {
+                                    row.forEach { challenge ->
+                                        val idx = phaseChallenges.indexOf(challenge)
+                                        ObjectiveCard(
+                                            modifier = Modifier
+                                                .width(cellSize)
+                                                .aspectRatio(1f),
+                                            challenge = challenge,
+                                            checked = challengeCheckList[idx] ?: false,
+                                            onCheckedChange = { checked ->
+                                                challengeCheckList[idx] = checked
+                                                if (challenge.isManuallyCheckable) {
+                                                    db.collection("users").document(userId)
+                                                        .collection("groups").document(groupId)
+                                                        .collection("phases").document("phase${phase.value}")
+                                                        .collection("retos").document(challenge.title)
+                                                        .set(mapOf("completed" to checked))
+                                                }
+                                            },
+                                            onClick = {
+                                                selectedChallenge.value = challenge
+                                                selectedIndex.value = idx
+                                                showDialog.value = true
+                                            },
+                                            onReflectionSaved = { reflectionSaved = it }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                item {
+                    if (showDialog.value && selectedChallenge.value != null) {
+                        showChallengeDialog(
+                            challenge = selectedChallenge.value!!,
+                            onDismiss = { showDialog.value = false },
+                            auth = auth,
+                            groupViewModel = groupViewModel,
+                            navController = navController,
+                            adViewModel = adViewModel
+                        )
+                    }
+                }
+            }
+
+
+
+            if (showDialog.value && selectedChallenge.value != null) {
+                showChallengeDialog(
+                    challenge = selectedChallenge.value!!,
+                    onDismiss = { showDialog.value = false },
+                    auth = auth,
+                    groupViewModel = groupViewModel,
+                    navController = navController,
+                    adViewModel = adViewModel
+                )
             }
         }
     }
 }
 
-
-
-
 @Composable
 fun ObjectiveCard(
+    modifier: Modifier = Modifier,
     challenge: Challenge,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     onClick: () -> Unit,
-    onReflectionSaved: (Boolean) -> Unit // Callback para actualizar el estado cuando se guarda la reflexión
+    onReflectionSaved: (Boolean) -> Unit
 ) {
-    // Determinamos el color del icono y del texto
-    val iconTintColor = when {
-        challenge.title == "Reflexión diaria" -> if (checked) Color(0xFF4CAF50) else Color.Red // Reflexión diaria siempre en rojo si no está hecha
-        checked -> Color(0xFF4CAF50) // Verde si está hecha
-        challenge.isManuallyCheckable -> Color.Red // Rojo si se puede marcar y no está hecha
-        else -> Color.White // Blanco si no se puede marcar y no está hecha
-    }
-
-    val textColor = when {
-        challenge.title == "Reflexión diaria" -> if (checked) Color(0xFF4CAF50) else Color.Red // Reflexión diaria siempre en rojo si no está hecha
-        checked -> Color(0xFF4CAF50) // Verde si está hecha
-        challenge.isManuallyCheckable -> Color.Red // Rojo si se puede marcar y no está hecha
-        else -> Color.White // Blanco si no se puede marcar y no está hecha
-    }
-
     Card(
-        modifier = Modifier
-            .width(160.dp)
-            .aspectRatio(1f)
-            .clickable { onClick() },
+        modifier = modifier.clickable { onClick() },
         shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(8.dp),
         colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF1E1EF),
+            containerColor = Color(0xFF1E1E2F),
             contentColor = Color.White
         )
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.SpaceBetween,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Icon(
-                imageVector = Icons.Default.CheckCircle,
-                contentDescription = challenge.title,
-                tint = iconTintColor,
-                modifier = Modifier.size(36.dp)
-            )
-            Text(
-                text = challenge.title,
-                color = textColor,
-                fontSize = 16.sp,
-                textAlign = TextAlign.Center,
-                maxLines = 2
-            )
-            Checkbox(
-                checked = checked,
-                onCheckedChange = if (challenge.isManuallyCheckable) {
-                    onCheckedChange
-                } else null,
-                enabled = challenge.isManuallyCheckable,
-                colors = CheckboxDefaults.colors(
-                    checkedColor = Color(0xFF4CAF50),
-                    uncheckedColor = if (challenge.isManuallyCheckable && !checked) Color.Red else Color.White
+        // Escalamos icono, texto y checkbox según el tamaño real de la card
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            val side = maxWidth
+            val padding = side * 0.08f
+            val corner = side * 0.08f  // si quieres bordes proporcionales, cambia shape arriba por RoundedCornerShape(corner)
+            val iconSize = side * 0.28f
+            val textSize = (side.value * 0.10f).coerceIn(12f, 18f).sp
+            val checkBoxSize = side * 0.22f
+
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                verticalArrangement = Arrangement.SpaceBetween,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                val tintColor = when {
+                    challenge.title == "Reflexión diaria" -> if (checked) Color(0xFF4CAF50) else Color.Red
+                    checked -> Color(0xFF4CAF50)
+                    challenge.isManuallyCheckable -> Color.Red
+                    else -> Color.White
+                }
+
+                Icon(
+                    imageVector = Icons.Filled.CheckCircle,
+                    contentDescription = challenge.title,
+                    tint = tintColor,
+                    modifier = Modifier.size(iconSize)
                 )
-            )
+
+                Text(
+                    text = challenge.title,
+                    color = tintColor.takeIf { challenge.title == "Reflexión diaria" || checked || challenge.isManuallyCheckable }
+                        ?: Color.White,
+                    fontSize = textSize,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2
+                )
+
+                Box(modifier = Modifier.size(checkBoxSize)) {
+                    Checkbox(
+                        checked = checked,
+                        onCheckedChange = if (challenge.isManuallyCheckable) onCheckedChange else null,
+                        enabled = challenge.isManuallyCheckable,
+                        colors = CheckboxDefaults.colors(
+                            checkedColor = Color(0xFF4CAF50),
+                            uncheckedColor = if (challenge.isManuallyCheckable && !checked) Color.Red else Color.White
+                        ),
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
         }
     }
 
-    // Si se trata de una reflexión diaria, cuando se guarda, se actualiza el estado
+    // Reflexión diaria → marcar como completada
     if (challenge.title == "Reflexión diaria" && checked) {
-        onReflectionSaved(true) // Esto actualizará el estado de la reflexión
+        onReflectionSaved(true)
     }
 }
 
@@ -565,7 +603,7 @@ fun getPhaseObjective(phase: Int, targetDuration: Long): PhaseInfo{
 fun getPhaseChallenges(phase: Int): List<Challenge> {
     return when (phase) {
         1 -> listOf(
-            Challenge("Mover apps", "Mueve las apps que más usas fuera de la pantalla principal cuanto mas alejada de la pantalla principal este la pantalla a la qe las mueves mejor.\n\nUna vez lo hayas hecho marca el check para esta tarea en la app", true),
+            Challenge("Mover apps", "Mueve las apps que más usas fuera de la pantalla principal cuanto mas alejada de la pantalla principal este la pantalla a la que las mueves mejor.\n\nUna vez lo hayas hecho marca el check para esta tarea en la app", true),
             Challenge("Modo oscuro o blanco y negro", "Activa el modo oscuro en tu movil y en todas las aplicaciones que te lo permitan o pon el móvil en blanco y negro si es posible.\n\nUna vez lo hayas hecho marca el check para esta tarea en la app", true),
             Challenge("Eliminar app ligera", "Elimina una app que uses habitualmente y no sea una red social (juego, compras, noticias...)\n\nUna vez lo hayas hecho marca el check para esta tarea en la app", true),
             Challenge("Reflexión diaria", "Comparte con los miembros del grupo alguna dificultad que hayas tenido para reducir el uso del movil / algun beneficio que has notado gracias a usar menos el movil / algo que hayas hecho en lugar de estar perdiendo el tiempo con el movil.", false)

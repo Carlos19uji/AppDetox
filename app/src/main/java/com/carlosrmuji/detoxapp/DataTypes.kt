@@ -5,6 +5,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import com.google.firebase.Timestamp
 import java.text.SimpleDateFormat
 import java.time.DayOfWeek
+import java.time.Duration
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.util.Date
@@ -27,7 +28,9 @@ data class InstalledAppInfo(
 
 data class BlockedApp(
     val app: InstalledAppInfo,
-    val restrictions: List<AppRestriction>
+    val restrictions: List<AppRestriction> = emptyList(),
+    // Nuevo: límite por día (ej: MONDAY -> Duration.ofMinutes(90))
+    val limitUsageByDay: Map<DayOfWeek, Duration> = emptyMap()
 )
 
 data class AppRestriction(

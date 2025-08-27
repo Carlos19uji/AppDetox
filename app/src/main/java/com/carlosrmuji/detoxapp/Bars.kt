@@ -20,9 +20,11 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material.Text
 import androidx.compose.material.TextButton
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AppBlocking
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowUp
@@ -57,60 +59,45 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
 @Composable
-fun TopBarGroup(
+fun GroupTopBar(
     navController: NavController,
-    groupViewModel: GroupViewModel,
     auth: FirebaseAuth,
     modifier: Modifier = Modifier
 ) {
     val expanded = remember { mutableStateOf(false) }
     val showLogOutDialog = remember { mutableStateOf(false) }
 
-    // ────────────────────────────────────────────────
-    // Usamos un Box que ocupe todo el ancho y 56dp de alto
-    // ────────────────────────────────────────────────
-    Box(
+    Row(
         modifier = modifier
             .fillMaxWidth()
             .height(56.dp)
             .background(Color.Black)
-            .padding(horizontal = 16.dp)
+            .padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        // ───────────────────────────────────────────
-        // 1) Bloque izquierdo (flecha + "Grupos")
-        //    Alineado a la izquierda con align(Alignment.CenterStart)
-        // ───────────────────────────────────────────
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
+        // Icono y texto a la izquierda
+        Icon(
+            imageVector = Icons.Default.ArrowBack,
+            contentDescription = "ArrowBack",
+            tint = Color.White,
             modifier = Modifier
-                .align(Alignment.CenterStart)
-                .clickable {
-                    navController.navigate(Screen.Home.route)
-                }
-        ) {
-            Icon(
-                imageVector = Icons.Default.ArrowBack,
-                contentDescription = "Volver",
-                tint = Color.White
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "Grupos",
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
-        }
+                .size(24.dp)
+                .clickable { navController.navigate(Screen.Stats.route) }
+        )
 
-        // ───────────────────────────────────────────
-        // 2) Bloque derecho (TopBarMenu)
-        //    Alineado a la derecha con align(Alignment.CenterEnd)
-        // ───────────────────────────────────────────
-        Box(
-            modifier = Modifier.align(Alignment.CenterEnd)
-        ) {
-            TopBarMenu(navController, auth, expanded, showLogOutDialog)
-        }
+        Spacer(modifier = Modifier.width(8.dp)) // separación entre icono y texto
+
+        Text(
+            text = "DetoxApp",
+            color = Color.White,
+            fontWeight = FontWeight.Bold,
+            fontSize = 20.sp
+        )
+
+        Spacer(modifier = Modifier.weight(1f)) // empuja el menú hacia la derecha
+
+        // Menú alineado a la derecha
+        TopBarMenu(navController, auth, expanded, showLogOutDialog)
     }
 }
 
@@ -193,20 +180,6 @@ fun TopBarMenu(
                 }
             )
             DropdownMenuItem(
-                text = { Text("Restringir Apps") },
-                onClick = {
-                    navController.navigate(Screen.AppBloq.route)
-                    expanded.value = false
-                }
-            )
-            DropdownMenuItem(
-                text = { Text("Grupos") },
-                onClick = {
-                    navController.navigate(Screen.Home.route)
-                    expanded.value = false
-                }
-            )
-            DropdownMenuItem(
                 text = { Text("Cerrar Sesión") },
                 onClick = {
                     showLogOutDialog.value = true
@@ -254,7 +227,7 @@ fun LogOutConfirmationDialog(onConfirm: () -> Unit, onCancel: () -> Unit){
 }
 
 @Composable
-fun BottomBar(
+fun BottomBarGroups(
     navController: NavController,
     groupViewModel: GroupViewModel,
     auth: FirebaseAuth,
@@ -334,29 +307,6 @@ fun BottomBar(
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Stats button
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.clickable {
-                Log.d("BottomBar", "Navigating to Stats")
-                navController.navigate(Screen.Stats.route) {
-                    popUpTo(navController.graph.startDestinationId)
-                    launchSingleTop = true
-                }
-            }
-        ) {
-            Icon(
-                imageVector = Icons.Default.Info,
-                contentDescription = "Estadísticas",
-                tint = if (navController.currentDestination?.route == Screen.Stats.route) Color.White else Color.Gray,
-                modifier = Modifier.size(24.dp)
-            )
-            Text(
-                "Estadísticas",
-                color = if (navController.currentDestination?.route == Screen.Stats.route) Color.White else Color.Gray,
-                fontSize = 12.sp
-            )
-        }
 
         // Fase button
         Column(
@@ -386,30 +336,6 @@ fun BottomBar(
             Text(
                 "Fase",
                 color = faseColor,
-                fontSize = 12.sp
-            )
-        }
-
-        //AI Button
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.clickable {
-                Log.d("BottomBar", "Navigating to Home (Group)")
-                navController.navigate(Screen.AIChat.route) {
-                    popUpTo(navController.graph.startDestinationId)
-                    launchSingleTop = true
-                }
-            }
-        ) {
-            Icon(
-                imageVector = Icons.Default.Chat,
-                contentDescription = "IA",
-                tint = if (navController.currentDestination?.route == Screen.AIChat.route) Color.White else Color.Gray,
-                modifier = Modifier.size(24.dp)
-            )
-            Text(
-                "IA",
-                color = if (navController.currentDestination?.route == Screen.AIChat.route) Color.White else Color.Gray,
                 fontSize = 12.sp
             )
         }
@@ -458,6 +384,119 @@ fun BottomBar(
             Text(
                 "Reflexiones",
                 color = if (navController.currentDestination?.route == Screen.Messages.route) Color.White else Color.Gray,
+                fontSize = 12.sp
+            )
+        }
+    }
+}
+
+
+@Composable
+fun BottomBarIndividual(
+    navController: NavController,
+    modifier: Modifier = Modifier
+) {
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(Color.Black)
+            .padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Stats button
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.clickable {
+                Log.d("BottomBar", "Navigating to Stats")
+                navController.navigate(Screen.Stats.route) {
+                    popUpTo(navController.graph.startDestinationId)
+                    launchSingleTop = true
+                }
+            }
+        ) {
+            Icon(
+                imageVector = Icons.Default.Info,
+                contentDescription = "Estadísticas",
+                tint = if (navController.currentDestination?.route == Screen.Stats.route) Color.White else Color.Gray,
+                modifier = Modifier.size(24.dp)
+            )
+            Text(
+                "Estadísticas",
+                color = if (navController.currentDestination?.route == Screen.Stats.route) Color.White else Color.Gray,
+                fontSize = 12.sp
+            )
+        }
+
+        //AI Button
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.clickable {
+                Log.d("BottomBar", "Navigating to Home (Group)")
+                navController.navigate(Screen.AIChat.route) {
+                    popUpTo(navController.graph.startDestinationId)
+                    launchSingleTop = true
+                }
+            }
+        ) {
+            Icon(
+                imageVector = Icons.Default.Chat,
+                contentDescription = "IA",
+                tint = if (navController.currentDestination?.route == Screen.AIChat.route) Color.White else Color.Gray,
+                modifier = Modifier.size(24.dp)
+            )
+            Text(
+                "IA",
+                color = if (navController.currentDestination?.route == Screen.AIChat.route) Color.White else Color.Gray,
+                fontSize = 12.sp
+            )
+        }
+
+        // Restricciones button
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.clickable {
+                Log.d("BottomBar", "Navigating to Ranking")
+                navController.navigate(Screen.AppBloq.route) {
+                    popUpTo(navController.graph.startDestinationId)
+                    launchSingleTop = true
+                }
+            }
+        ) {
+            Icon(
+                imageVector = Icons.Default.AppBlocking,
+                contentDescription = "Restrictions",
+                tint = if (navController.currentDestination?.route == Screen.AppBloq.route) Color.White else Color.Gray,
+                modifier = Modifier.size(24.dp)
+            )
+            Text(
+                "Restricciones",
+                color = if (navController.currentDestination?.route == Screen.AppBloq.route) Color.White else Color.Gray,
+                fontSize = 12.sp
+            )
+        }
+
+        //Groups button
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.clickable {
+                Log.d("BottomBar", "Navigating to Ranking")
+                navController.navigate(Screen.Home.route) {
+                    popUpTo(navController.graph.startDestinationId)
+                    launchSingleTop = true
+                }
+            }
+        ) {
+            Icon(
+                imageVector = Icons.Default.Groups,
+                contentDescription = "Ranking",
+                tint = if (navController.currentDestination?.route == Screen.Home.route) Color.White else Color.Gray,
+                modifier = Modifier.size(24.dp)
+            )
+            Text(
+                "Grupos",
+                color = if (navController.currentDestination?.route == Screen.Home.route) Color.White else Color.Gray,
                 fontSize = 12.sp
             )
         }
