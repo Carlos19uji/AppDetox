@@ -1,4 +1,4 @@
-package com.carlosrmuji.detoxapp
+package com.carlosrmuji.detoxapp.Billing
 
 import android.app.Application
 import android.util.Log
@@ -26,12 +26,16 @@ class AdViewModel(application: Application) : AndroidViewModel(application) {
     private var _messageSaveInterstitialAd: InterstitialAd? = null
     private var _joinOrCreateGroupInterstitialAd: InterstitialAd? = null
     private var _aichatInterstitialAd: InterstitialAd? = null
+    private var _restrictAppAd: InterstitialAd? = null
+    private var _restrictedPhoneAdd: InterstitialAd? = null
 
     val homeInterstitialAd: InterstitialAd? get() = _homeInterstitialAd
     val editProfileInterstitialAd: InterstitialAd? get() = _editProfileInterstitialAd
     val messageSaveInterstitialAd: InterstitialAd? get() = _messageSaveInterstitialAd
     val joinOrCreateGroupInterstitialAd: InterstitialAd? get() = _joinOrCreateGroupInterstitialAd
     val aichatInterstitialAd: InterstitialAd? get() = _aichatInterstitialAd
+    val restrictAppAd: InterstitialAd? get() = _restrictAppAd
+    val restrictedPhoneAd: InterstitialAd? get() = _restrictedPhoneAdd
 
     init {
         viewModelScope.launch {
@@ -71,6 +75,8 @@ class AdViewModel(application: Application) : AndroidViewModel(application) {
         loadMessageSaveAd()
         loadCreateOrJoinGroupAd()
         loadAiChatAd()
+        loadRestrictAppsAd()
+        loadRestrictedPhoneAd()
     }
 
     fun clearAllAds() {
@@ -79,6 +85,7 @@ class AdViewModel(application: Application) : AndroidViewModel(application) {
         _messageSaveInterstitialAd = null
         _joinOrCreateGroupInterstitialAd = null
         _aichatInterstitialAd = null
+        _restrictAppAd = null
     }
 
     fun loadHomeAd() {
@@ -97,6 +104,41 @@ class AdViewModel(application: Application) : AndroidViewModel(application) {
             }
         )
     }
+
+    fun loadRestrictAppsAd(){
+        InterstitialAd.load(
+            context,
+            "ca-app-pub-7055736346592282/1407022728",
+            adRequest,
+            object : InterstitialAdLoadCallback(){
+                override fun onAdLoaded(ad: InterstitialAd) {
+                    _restrictAppAd = ad
+                }
+
+                override fun onAdFailedToLoad(error: LoadAdError) {
+                    _restrictAppAd = null
+                }
+            }
+        )
+    }
+
+    fun loadRestrictedPhoneAd(){
+        InterstitialAd.load(
+            context,
+            "ca-app-pub-7055736346592282/9332575160",
+            adRequest,
+            object : InterstitialAdLoadCallback(){
+                override fun onAdLoaded(ad: InterstitialAd) {
+                    _restrictedPhoneAdd = ad
+                }
+
+                override fun onAdFailedToLoad(error: LoadAdError) {
+                    _restrictedPhoneAdd = null
+                }
+            }
+        )
+    }
+
 
     fun loadEditProfileAd() {
         InterstitialAd.load(
@@ -172,4 +214,6 @@ class AdViewModel(application: Application) : AndroidViewModel(application) {
     fun clearMessageSaveAd() { _messageSaveInterstitialAd = null }
     fun clearCreateOrJoinAd() { _joinOrCreateGroupInterstitialAd = null }
     fun clearAIChatAd() { _aichatInterstitialAd = null }
+    fun clearRestrictionAppAd() { _restrictAppAd = null }
+    fun clearRestrictedPhoneAd(){ _restrictedPhoneAdd =  null}
 }

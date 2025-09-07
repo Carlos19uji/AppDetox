@@ -1,4 +1,4 @@
-package com.carlosrmuji.detoxapp
+package com.carlosrmuji.detoxapp.Groups
 
 import android.app.Activity
 import androidx.compose.foundation.background
@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -32,7 +31,6 @@ import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -42,7 +40,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -51,19 +48,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.navigation.NavController
+import com.carlosrmuji.detoxapp.Billing.AdViewModel
+import com.carlosrmuji.detoxapp.GroupViewModel
+import com.carlosrmuji.detoxapp.Message
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.tasks.await
 import java.time.Instant
 import java.time.LocalDate
-import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
-import java.util.Locale
-import java.time.format.TextStyle
 import java.util.UUID
 
 
@@ -204,35 +200,36 @@ fun Messages(
                         state = listState,
                         modifier = Modifier.fillMaxSize()
                     ) {
-                        val shownDates = mutableSetOf<String>()
-                        items(messages) { msg ->
-                            val dateKey = getDateKey(msg.timestamp)
-                            if (dateKey !in shownDates) {
-                                shownDates.add(dateKey)
-                                DateSeparator(getFormattedDate(msg.timestamp))
+                        val groupedMessages = messages.groupBy { getDateKey(it.timestamp) }
+
+                        groupedMessages.forEach { (_, msgsForDate) ->
+                            item {
+                                DateSeparator(getFormattedDate(msgsForDate.first().timestamp))
                             }
-                            MessageBubble(
-                                message = msg,
-                                isCurrentUser = msg.userId == currentUserId,
-                                onEdit = { message ->
-                                    inputText = message.text
-                                    editingMessage = message
-                                },
-                                onDelete = { message ->
-                                    db.collection("users")
-                                        .document(currentUserId)
-                                        .collection("groups")
-                                        .document(groupId)
-                                        .collection("messages")
-                                        .document(message.id)
-                                        .delete()
-                                        .addOnSuccessListener {
-                                            messages = messages.filter { it.id != message.id }
-                                            reflectionDoneToday = false
-                                        }
-                                }
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
+                            items(msgsForDate) { msg ->
+                                MessageBubble(
+                                    message = msg,
+                                    isCurrentUser = msg.userId == currentUserId,
+                                    onEdit = { message ->
+                                        inputText = message.text
+                                        editingMessage = message
+                                    },
+                                    onDelete = { message ->
+                                        db.collection("users")
+                                            .document(currentUserId)
+                                            .collection("groups")
+                                            .document(groupId)
+                                            .collection("messages")
+                                            .document(message.id)
+                                            .delete()
+                                            .addOnSuccessListener {
+                                                messages = messages.filter { it.id != message.id }
+                                                reflectionDoneToday = false
+                                            }
+                                    }
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                            }
                         }
                     }
                 }

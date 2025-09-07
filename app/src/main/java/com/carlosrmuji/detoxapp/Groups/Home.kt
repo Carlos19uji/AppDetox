@@ -1,14 +1,15 @@
-package com.carlosrmuji.detoxapp
+package com.carlosrmuji.detoxapp.Groups
 
 import android.app.Activity
 import android.content.Context
-import android.util.Log
-import android.widget.Space
+import android.content.pm.PackageManager
+import android.os.Build
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -18,7 +19,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -35,7 +35,6 @@ import androidx.compose.material.TextField
 import androidx.compose.material.TextFieldDefaults
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
@@ -54,13 +53,16 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
-import com.google.android.gms.ads.AdError
-import com.google.android.gms.ads.FullScreenContentCallback
-import com.google.android.gms.ads.LoadAdError
-import com.google.android.gms.ads.interstitial.InterstitialAd
-import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
+import com.carlosrmuji.detoxapp.Billing.AdViewModel
+import com.carlosrmuji.detoxapp.GroupData
+import com.carlosrmuji.detoxapp.GroupViewModel
+import com.carlosrmuji.detoxapp.MemberData
+import com.carlosrmuji.detoxapp.Screen
+import com.carlosrmuji.detoxapp.isUsageStatsPermissionGranted
+import com.carlosrmuji.detoxapp.requestUsageStatsPermission
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldPath
@@ -70,19 +72,31 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
-import com.google.android.gms.ads.AdRequest
 import com.google.firebase.firestore.FieldValue
 
 @Composable
 fun HomeScreen(navController: NavController,
                auth: FirebaseAuth,
                groupViewModel: GroupViewModel = viewModel(),
-               adViewModel: AdViewModel) {
+               adViewModel: AdViewModel
+) {
     val db = FirebaseFirestore.getInstance()
     val userID = auth.currentUser?.uid ?: return
 
     val context = LocalContext.current
 
+    // === 1. Launcher para pedir permiso de notificaciones (Android 13+) ===
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            Toast.makeText(context, "Permiso de notificaciones concedido", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(context, "Permiso de notificaciones denegado", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // === 2. Efecto para pedir primero Usage Stats y después notificaciones ===
     LaunchedEffect(Unit) {
         if (!isUsageStatsPermissionGranted(context)) {
             Toast.makeText(
@@ -91,6 +105,17 @@ fun HomeScreen(navController: NavController,
                 Toast.LENGTH_LONG
             ).show()
             requestUsageStatsPermission(context)
+        } else {
+            // ✅ Cuando ya tenga permiso de Usage Stats, pedimos permiso de notificaciones
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                if (ContextCompat.checkSelfPermission(
+                        context,
+                        android.Manifest.permission.POST_NOTIFICATIONS
+                    ) != PackageManager.PERMISSION_GRANTED
+                ) {
+                    notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                }
+            }
         }
     }
 
@@ -623,7 +648,8 @@ fun YourName(
     navController: NavController,
     groupName: String, auth: FirebaseAuth,
     groupViewModel: GroupViewModel,
-    adViewModel: AdViewModel) {
+    adViewModel: AdViewModel
+) {
     val context = LocalContext.current
     val userID = auth.currentUser?.uid ?: return
     var userName by remember { mutableStateOf("Nombre") }

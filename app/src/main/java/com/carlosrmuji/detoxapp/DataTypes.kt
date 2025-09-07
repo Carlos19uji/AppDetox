@@ -20,6 +20,15 @@ data class Plan(
     val features: List<String>
 )
 
+
+data class PhoneBlockRule(
+    val id: String = "",
+    val label: String = "",
+    val isActive: Boolean = true,
+    val phone_block: Map<String, Map<String, String>> = emptyMap()
+)
+
+
 data class InstalledAppInfo(
     val packageName: String,
     val appName: String,

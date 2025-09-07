@@ -140,7 +140,7 @@ fun LoginScreen(
                         .addOnCompleteListener { task ->
                             if (task.isSuccessful){
                                 SecurePrefs.saveCredentials(context, emailState.value, passwordState.value)
-                                navController.navigate(Screen.Home.route)
+                                navController.navigate(Screen.Stats.route)
                             } else {
                                 Toast.makeText(
                                     context,
@@ -202,6 +202,7 @@ fun CreateAccount(
 ) {
     var emailState = remember { mutableStateOf("") }
     var passwordState = remember { mutableStateOf("") }
+    val context = LocalContext.current
 
     Column(
         modifier = Modifier
@@ -225,6 +226,7 @@ fun CreateAccount(
                     ).addOnCompleteListener { task ->
                         if (task.isSuccessful) {
                             val userId = task.result?.user?.uid
+                            val user = auth.currentUser
                             if (userId != null) {
                                 val db = FirebaseFirestore.getInstance()
                                 val userDoc = db.collection("users").document(userId)
@@ -271,7 +273,20 @@ fun CreateAccount(
                                         .set(planData)
                                         .addOnSuccessListener {
                                             Log.d("Firestore", "Plan info saved successfully!")
-                                            navController.navigate(Screen.Home.route)
+
+                                            // --- Enviar correo de verificación ---
+                                            // Llamamos a sendEmailVerification() sobre el usuario recién creado.
+                                            user?.sendEmailVerification()
+                                                ?.addOnCompleteListener { emailTask ->
+                                                    if (emailTask.isSuccessful) {
+                                                        Log.d("Email", "Verificación enviada a ${emailState.value}")
+                                                    } else {
+                                                        Log.e("Email", "Error enviando verificacion: ${emailTask.exception?.message}")
+                                                    }
+
+                                                    // Navegar después de intentar enviar el correo (ajusta si quieres otro comportamiento)
+                                                    navController.navigate(Screen.Stats.route)
+                                                }
                                         }
                                         .addOnFailureListener { e ->
                                             Log.e("Firestore", "Error saving plan data: ${e.message}")
@@ -284,8 +299,15 @@ fun CreateAccount(
                             }
                         } else {
                             Log.e("Auth", "Error creating user: ${task.exception?.message}")
+                            Toast.makeText(
+                                context,
+                                "Error creando usuario: ${task.exception?.message}",
+                                Toast.LENGTH_LONG
+                            ).show()
                         }
                     }
+                } else {
+                    Toast.makeText(context, "Introduce email y contraseña", Toast.LENGTH_LONG).show()
                 }
             },
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF888888)), // Gris medio
@@ -437,24 +459,7 @@ fun email(emailState: MutableState<String>) {
 }
 
 
-class LastCharVisiblePasswordTransformation : VisualTransformation {
-    var passwordVisible by mutableStateOf(false)
 
-    override fun filter(text: AnnotatedString): TransformedText {
-        val transformed = if (passwordVisible) {
-            text.text
-        } else {
-            text.text.mapIndexed { index, c ->
-                if (index == text.text.lastIndex) c else '*'
-            }.joinToString("")
-        }
-        return TransformedText(AnnotatedString(transformed), OffsetMapping.Identity)
-    }
-
-    fun togglePasswordVisibility() {
-        passwordVisible = !passwordVisible
-    }
-}
 
 
 @Composable

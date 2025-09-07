@@ -1,6 +1,7 @@
-package com.carlosrmuji.detoxapp
+package com.carlosrmuji.detoxapp.AI
 
 import android.util.Log
+import com.carlosrmuji.detoxapp.AIChatMessageData
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
@@ -31,9 +32,9 @@ Si el usuario hace una pregunta que NO tiene relación con estos temas, responde
 
 Puedes hablar sobre cualquier aplicación que el usuario mencione (por ejemplo, TikTok, Instagram, YouTube, etc.). Pero bajo ningún concepto debes recomendar el uso de aplicaciones externas o de terceros para reducir el uso del móvil, ya que eso redirigiría al usuario fuera de esta app.
 
-Esta app cuenta con una funcionalidad que permite restringir el uso de aplicaciones específicas durante los horarios definidos por el propio usuario. Puedes recomendar esta funcionalidad **solo si es claramente útil en el contexto de la consulta** (por ejemplo, si el usuario quiere reducir el uso de una app concreta como TikTok o necesita limitar su uso en ciertos momentos del día).
+Esta app cuenta con una funcionalidad que permite restringir el uso de aplicaciones específicas durante los horarios definidos por el propio usuario (por ejemplo viernes, sabado y domingo no se puede acceder a la app especificada de 18 a 20) o estalbeciendo un limite de uso máximo diario, por ejemplo establecer para los miercoles y viernes no poder usar tiktok mas de 2 horas al dia, si se llega a esas 2 horas el usuario no podra acceder mas a dicha app durante el dia actual. Puedes recomendar esta funcionalidad **solo si es claramente útil en el contexto de la consulta** (por ejemplo, si el usuario quiere reducir el uso de una app concreta como TikTok o necesita limitar su uso en ciertos momentos del día).
 
-Si mencionas esta funcionalidad, especifica que se trata de una función propia de esta app y que se puede encontrar haciendo clic en el icono de menú arriba a la derecha, en la opción “Restringir Apps”.
+Si mencionas esta funcionalidad, especifica que se trata de una función propia de esta app y que se puede encontrar en la parte inferior de la pantalla en la seccion “Restricciones”.
                 """.trimIndent())
             })
 

@@ -1,9 +1,7 @@
-package com.carlosrmuji.detoxapp
+package com.carlosrmuji.detoxapp.Billing
 
 import android.app.Activity
 import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
@@ -22,14 +20,11 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.AlertDialog
 import androidx.compose.material.Button
 import androidx.compose.material.ButtonDefaults
 import androidx.compose.material.Icon
 import androidx.compose.material.IconButton
-import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Text
-import androidx.compose.material.TextButton
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -57,8 +52,8 @@ import com.android.billingclient.api.Purchase
 import com.android.billingclient.api.PurchasesUpdatedListener
 import com.android.billingclient.api.QueryProductDetailsParams
 import com.android.billingclient.api.QueryPurchasesParams
-import com.android.billingclient.api.SkuDetails
-import com.android.billingclient.api.SkuDetailsParams
+import com.carlosrmuji.detoxapp.BillingViewModel
+import com.carlosrmuji.detoxapp.Plan
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
@@ -395,8 +390,9 @@ fun BillingScreen(
             title = "Estándar",
             price = "Gratis",
             features = listOf(
-                "5 tokens semanales",
+                "5 tokens semanales para la IA",
                 "Restringe hasta 2 aplicaciones",
+                "Un horario de resticcion completa del telefono",
                 "Con anuncios"
             )
         ),
@@ -405,8 +401,9 @@ fun BillingScreen(
             title = "Plus",
             price = "2,99€ / mes",
             features = listOf(
-                "25 tokens semanales",
+                "25 tokens semanales para la IA",
                 "Restringe hasta 5 aplicaciones",
+                "Hasta 3 horarios de resticcion completa del telefono",
                 "Sin anuncios",
             )
         ),
@@ -415,8 +412,9 @@ fun BillingScreen(
             title = "Premium",
             price = "4,99€ / mes",
             features = listOf(
-                "Tokens ilimitados",
+                "Tokens ilimitados para la IA",
                 "Restringe aplicaciones ilimitadas",
+                "Resticcionnes completa del telefono ilimitadas",
                 "Sin anuncios"
             )
         )

@@ -4,21 +4,16 @@ import android.app.Activity
 import android.app.Application
 import android.content.Context
 import android.util.Log
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.systemBars
 import androidx.compose.material.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModel
 import androidx.navigation.NavType
@@ -34,12 +29,29 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.android.billingclient.api.SkuDetails
+import com.carlosrmuji.detoxapp.AI.AIChat
+import com.carlosrmuji.detoxapp.Billing.AdViewModel
+import com.carlosrmuji.detoxapp.Billing.BillingManager
+import com.carlosrmuji.detoxapp.Billing.BillingScreen
+import com.carlosrmuji.detoxapp.Groups.CreateGroupScreen
+import com.carlosrmuji.detoxapp.Groups.HomeScreen
+import com.carlosrmuji.detoxapp.Groups.Messages
+import com.carlosrmuji.detoxapp.Groups.Objectives
+import com.carlosrmuji.detoxapp.Groups.PhaseEndScreen
+import com.carlosrmuji.detoxapp.Groups.PhaseIntroScreen
+import com.carlosrmuji.detoxapp.Groups.Previa
+import com.carlosrmuji.detoxapp.Groups.Ranking
+import com.carlosrmuji.detoxapp.Groups.YourName
+import com.carlosrmuji.detoxapp.Groups.YourNameJoin
+import com.carlosrmuji.detoxapp.Groups.generateDynamicInviteLink
+import com.carlosrmuji.detoxapp.Restrictions.AppBloqScreen
+import com.carlosrmuji.detoxapp.Restrictions.DayPassBillingManager
+import com.carlosrmuji.detoxapp.Restrictions.DayPassBillingScreen
+import com.carlosrmuji.detoxapp.Restrictions.PhoneBloqScreen
 import com.example.detoxapp.BottomBarGroups
 import com.example.detoxapp.BottomBarIndividual
 import com.example.detoxapp.GroupTopBar
 import com.example.detoxapp.HomeTopBar
-import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.launch
@@ -145,6 +157,8 @@ class BillingViewModel(application: Application) : AndroidViewModel(application)
     }
 }
 
+
+
 @Composable
 fun MainApp(
     auth: FirebaseAuth,
@@ -157,6 +171,10 @@ fun MainApp(
     val adViewModel: AdViewModel = viewModel(
         factory = ViewModelProvider.AndroidViewModelFactory(LocalContext.current.applicationContext as Application)
     )
+
+    val context = LocalContext.current
+    val dayPassBillingManager = remember { DayPassBillingManager(context) }
+
 
     val firebaseUserState = remember { mutableStateOf<FirebaseUser?>(auth.currentUser) }
 
@@ -210,7 +228,8 @@ fun MainApp(
                     Screen.Stats.route,
                     Screen.EditProfile.route,
                     Screen.AIChat.route,
-                    Screen.AppBloq.route
+                    Screen.AppBloq.route,
+                    Screen.PhoneBloq.route
             )) {
                 HomeTopBar(
                     navController = navController,
@@ -254,7 +273,8 @@ fun MainApp(
                     Screen.Stats.route,
                     Screen.EditProfile.route,
                     Screen.AppBloq.route,
-                    Screen.Home.route
+                    Screen.Home.route,
+                    Screen.PhoneBloq.route
                 )
             ) {
                 BottomBarIndividual(
@@ -354,13 +374,30 @@ fun MainApp(
                 EditProfile(navController, groupViewModel, auth, adViewModel)
             }
             composable(Screen.AppBloq.route) {
-                AppBloqScreen(navController)
+                AppBloqScreen(navController, adViewModel)
+            }
+            composable(Screen.PhoneBloq.route) {
+                PhoneBloqScreen(navController, adViewModel)
             }
             composable(Screen.PlansScreen.route) {
                 BillingScreen(
                     billingViewModel = billingViewModel,
                     onClose = { navController.popBackStack() }
                 )
+            }
+            composable(
+                route = "daypass/{packageName}",
+                arguments = listOf(navArgument("packageName") { type = NavType.StringType })
+            ) { backStackEntry ->
+                val passedPackageName = backStackEntry.arguments?.getString("packageName") ?: ""
+
+                if (passedPackageName.isNotEmpty()) {
+                    DayPassBillingScreen(
+                        packageName = passedPackageName,
+                        dayPassBillingManager = dayPassBillingManager,
+                        onCancel = { navController.popBackStack() }
+                    )
+                }
             }
         }
     }

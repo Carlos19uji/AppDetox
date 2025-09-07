@@ -3,9 +3,12 @@ package com.carlosrmuji.detoxapp
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.preference.PreferenceManager
 import android.util.Log
+import android.widget.Button
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -49,6 +52,7 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import com.carlosrmuji.detoxapp.Notifications.UsageNotificationService
 import com.example.detoxapp.ui.theme.DetoxAppTheme
 import com.google.accompanist.insets.ProvideWindowInsets
 import com.google.android.gms.ads.MobileAds
@@ -85,6 +89,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+
         Log.d(TAG, "MainActivity.onCreate START")
         billingViewModel = ViewModelProvider(this, ViewModelProvider.AndroidViewModelFactory.getInstance(application))
             .get(BillingViewModel::class.java)
@@ -127,17 +133,29 @@ class MainActivity : ComponentActivity() {
             billingViewModel.refreshUserPlanFromBilling()
         }
 
+        val serviceIntent = Intent(this, UsageNotificationService::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(serviceIntent)
+        } else {
+            startService(serviceIntent)
+        }
 
 
         setContent {
             DetoxAppTheme {
                 ProvideWindowInsets {
                     navController = rememberNavController()
-                    MainApp(auth, pendingGroupId = pendingGroupId.value, onGoogleSignIn = {signInWithGoogle()})
+                    MainApp(
+                        auth = auth,
+                        pendingGroupId = pendingGroupId.value,
+                        onGoogleSignIn = { signInWithGoogle() }
+                    )
                 }
             }
         }
     }
+
+
 
     fun scheduleTokenRenewalWorker(context: Context) {
         val calendar = Calendar.getInstance() // Hora actual
@@ -370,6 +388,11 @@ sealed class Screen(val route: String){
             return "your_name_join/$groupId"
         }
     }
+    object DayPass: Screen("daypass/{packageName}"){
+        fun createRoute(packgeName: String): String{
+            return "daypass/$packgeName"
+        }
+    }
     object Stats: Screen("stats")
     object Ranking: Screen("ranking")
     object PhaseIntroScreen: Screen("phase_intro")
@@ -380,6 +403,7 @@ sealed class Screen(val route: String){
     object EditProfile: Screen("edit_profile")
     object AIChat: Screen("ai_chat")
     object AppBloq: Screen("app_bloq")
+    object PhoneBloq: Screen("phone_bloq")
     object PlansScreen: Screen("plans_screen")
 }
 

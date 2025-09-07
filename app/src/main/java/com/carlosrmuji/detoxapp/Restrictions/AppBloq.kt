@@ -1,16 +1,14 @@
-package com.carlosrmuji.detoxapp
+package com.carlosrmuji.detoxapp.Restrictions
 
+import android.app.Activity
 import android.app.TimePickerDialog
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.os.Build
 import android.provider.Settings
 import android.util.Log
 import android.view.accessibility.AccessibilityManager
-import android.widget.Space
 import android.widget.Toast
-import androidx.annotation.RequiresApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -31,7 +29,6 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -45,7 +42,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -60,29 +57,40 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.core.graphics.drawable.toBitmap
 import androidx.navigation.NavController
-import com.carlosrmuji.detoxapp.RestrictionChecker.getUsageTodayFromSystem
+import com.carlosrmuji.detoxapp.Billing.AdViewModel
+import com.carlosrmuji.detoxapp.AppRestriction
+import com.carlosrmuji.detoxapp.BlockedApp
+import com.carlosrmuji.detoxapp.InstalledAppInfo
+import com.carlosrmuji.detoxapp.Restrictions.RestrictionChecker.getUsageTodayFromSystem
+import com.carlosrmuji.detoxapp.Screen
+import com.google.android.gms.ads.AdError
+import com.google.android.gms.ads.FullScreenContentCallback
 import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.auth
-import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.firestore
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
 import java.time.DayOfWeek
 import java.time.Duration
 import java.time.LocalDate
@@ -92,7 +100,7 @@ import java.time.format.TextStyle
 import java.util.Locale
 
 @Composable
-fun AppBloqScreen(navController: NavController) {
+fun AppBloqScreen(navController: NavController, adViewModel: AdViewModel) {
     val context = LocalContext.current
     var bloquedApps by remember { mutableStateOf(listOf<BlockedApp>()) }
     var showAppPicker by remember { mutableStateOf(false) }
@@ -102,73 +110,78 @@ fun AppBloqScreen(navController: NavController) {
     var selectedRestrictions by remember { mutableStateOf<List<AppRestriction>>(emptyList()) }
     var restrictionEditError by remember { mutableStateOf<String?>(null) }
     var showAccessibilityDialog by remember { mutableStateOf(false) }
-
-    var selectedDaysForLimit by remember { mutableStateOf<Set<DayOfWeek>>(emptySet()) } // Nuevo
-    var selectedLimit by remember { mutableStateOf<Duration?>(null) } // Nuevo
-
-    val installedApps = remember { getInstalledApps(context) }
-    val userId = getUserId()
-
+    var selectedDaysForLimit by remember { mutableStateOf<Set<DayOfWeek>>(emptySet()) }
+    var selectedLimit by remember { mutableStateOf<Duration?>(null) }
     var userPlan by remember { mutableStateOf("base_plan") }
     var showLimitMessage by remember { mutableStateOf(false) }
-
-    val limitReached = when (userPlan) {
-        "base_plan" -> bloquedApps.size >= 2
-        "plus_plan" -> bloquedApps.size >= 5
-        "premium_plan" -> false
-        else -> true
-    }
-
     var selectedTab by remember { mutableStateOf(0) }
+    var appPickerApps by remember { mutableStateOf<List<InstalledAppInfo>>(emptyList()) }
 
+    var installedApps by remember { mutableStateOf<List<InstalledAppInfo>>(emptyList()) }
+    val userId = getUserId()
 
-    LaunchedEffect(userId) {
-        loadBlockedAppsFromFirestore(
-            userId,
-            onResult = { loadedApps ->
-                bloquedApps = loadedApps.map { blockedApp ->
-                    findInstalledAppByPackage(installedApps, blockedApp.app.packageName)
-                        ?.let { blockedApp.copy(app = it) }
-                        ?: blockedApp
+    // Cargar apps instaladas
+    LaunchedEffect(Unit) {
+        installedApps = withContext(Dispatchers.IO) {
+            val pm = context.packageManager
+            pm.getInstalledApplications(PackageManager.GET_META_DATA)
+                .filter { pm.getLaunchIntentForPackage(it.packageName) != null }
+                .map { appInfo ->
+                    InstalledAppInfo(
+                        packageName = appInfo.packageName,
+                        appName = pm.getApplicationLabel(appInfo).toString(),
+                        icon = appInfo.loadIcon(pm).toBitmap().asImageBitmap()
+                    )
                 }
-            },
-            onError = { e ->
-                Toast.makeText(context, "Error cargando restricciones: ${e.message}", Toast.LENGTH_LONG).show()
-            }
-        )
+                .sortedBy { it.appName.lowercase() }
+        }
     }
 
-    LaunchedEffect(userId) {
+    // Cargar plan y apps bloqueadas
+    LaunchedEffect(userId, installedApps) {
+        if (installedApps.isEmpty()) return@LaunchedEffect
         try {
-            // 1. Obtener el plan del usuario
-            val planSnapshot = Firebase.firestore
-                .collection("users")
-                .document(userId)
-                .collection("plan")
-                .document("plan")
-                .get()
-                .await()
+            val planDeferred = async { loadUserPlan(userId) }
+            val appsDeferred = async { loadBlockedAppsFromFirestoreSuspend(userId) }
 
-            userPlan = planSnapshot.getString("plan") ?: "base_plan"
+            val plan = planDeferred.await()
+            val loadedApps = appsDeferred.await()
 
-            // 2. Obtener las apps bloqueadas
-            val loadedApps = loadBlockedAppsFromFirestoreSuspend(userId)
-
-            // 3. Aplicar el límite del plan
-            val filteredApps = enforcePlanLimit(loadedApps, userPlan, userId)
-
-            // 4. Mapear con apps instaladas
-            bloquedApps = filteredApps.mapNotNull { blockedApp ->
+            userPlan = plan
+            bloquedApps = enforcePlanLimit(loadedApps, plan, userId).mapNotNull { blockedApp ->
                 findInstalledAppByPackage(installedApps, blockedApp.app.packageName)
                     ?.let { blockedApp.copy(app = it) }
             }
-
         } catch (e: Exception) {
             Log.e("AppBloqScreen", "Error cargando apps o plan", e)
             Toast.makeText(context, "Error cargando restricciones: ${e.message}", Toast.LENGTH_LONG).show()
         }
     }
 
+    // 🔥 efecto para ocultar automáticamente el mensaje de límite
+    LaunchedEffect(showLimitMessage) {
+        if (showLimitMessage) {
+            delay(5000) // 5 segundos
+            showLimitMessage = false
+        }
+    }
+
+// 🔥 efecto para ocultar automáticamente el mensaje de error de edición
+    LaunchedEffect(restrictionEditError) {
+        if (restrictionEditError != null) {
+            delay(5000) // 5 segundos
+            restrictionEditError = null
+        }
+    }
+
+    // Contar apps únicas para límite
+    val uniqueBlockedAppsCount = bloquedApps.map { it.app.packageName }.distinct().size
+    val limitReached = when (userPlan) {
+        "base_plan" -> uniqueBlockedAppsCount >= 2
+        "plus_plan" -> uniqueBlockedAppsCount >= 5
+        "premium_plan" -> false
+        else -> true
+    }
 
     Box(
         modifier = Modifier
@@ -176,112 +189,119 @@ fun AppBloqScreen(navController: NavController) {
             .background(Color.Black)
             .padding(16.dp)
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            // Título
-            Text(
-                text = "Apps restringidas",
-                color = Color.White,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.align(Alignment.CenterHorizontally)
-            )
+        if (installedApps.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = Color.White)
+            }
+        } else {
+            Column(modifier = Modifier.fillMaxSize()) {
+                // Título
+                Text(
+                    text = "Apps restringidas",
+                    color = Color.White,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                )
+                Spacer(modifier = Modifier.height(16.dp))
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Row(
-                modifier = Modifier
-                    .padding(4.dp)
-                    .background(Color.DarkGray, RoundedCornerShape(30.dp))
-                    .padding(2.dp)
-                    .fillMaxWidth()
-            ) {
-                listOf("Horario", "Límite de uso").forEachIndexed { index, option ->
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .background(
-                                if (selectedTab == index) Color.Gray else Color.DarkGray,
-                                RoundedCornerShape(30.dp)
-                            )
-                            .clickable { selectedTab = index }
-                            .padding(vertical = 8.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(option, color = Color.White, fontWeight = FontWeight.Bold)
+                // Tabs
+                Row(
+                    modifier = Modifier
+                        .padding(4.dp)
+                        .background(Color.DarkGray, RoundedCornerShape(30.dp))
+                        .padding(2.dp)
+                        .fillMaxWidth()
+                ) {
+                    listOf("Horario", "Límite de uso").forEachIndexed { index, option ->
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .background(
+                                    if (selectedTab == index) Color.Gray else Color.DarkGray,
+                                    RoundedCornerShape(30.dp)
+                                )
+                                .clickable { selectedTab = index }
+                                .padding(vertical = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(option, color = Color.White, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
-            }
 
-            val filteredApps = if (selectedTab == 0) {
-                bloquedApps.filter { it.restrictions.isNotEmpty() }
-            } else {
-                bloquedApps.filter { it.limitUsageByDay.isNotEmpty() } // ✅ Cambiado
-            }
+                Spacer(modifier = Modifier.height(16.dp))
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Lista o mensaje vacío
-            if (filteredApps.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .weight(1f),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = if (selectedTab == 0)
-                            "Aún no se han aplicado restricciones por horario."
-                        else
-                            "Aún no se han aplicado restricciones por límite de uso.",
-                        color = Color.LightGray,
-                        textAlign = TextAlign.Center
-                    )
+                val filteredApps = if (selectedTab == 0) {
+                    bloquedApps.filter { it.restrictions.isNotEmpty() }
+                } else {
+                    bloquedApps.filter { it.limitUsageByDay.isNotEmpty() }
                 }
-            } else {
-                LazyColumn(modifier = Modifier.weight(1f)) {
-                    items(filteredApps) { blockedApp ->
-                        val isRestrictedNow = if (selectedTab == 0) {
-                            isRestrictedNow(blockedApp.restrictions)
-                        } else {
-                            isUsageLimitRestrictedNow(context, blockedApp.app.packageName, blockedApp.limitUsageByDay)
-                        }
-                        BlockedAppRow(blockedApp, isRestrictedNow) {
-                            if (selectedTab == 0) {
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                if (filteredApps.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .weight(1f),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = if (selectedTab == 0)
+                                "Aún no se han aplicado restricciones por horario."
+                            else
+                                "Aún no se han aplicado restricciones por límite de uso.",
+                            color = Color.LightGray,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                } else {
+                    LazyColumn(modifier = Modifier.weight(1f)) {
+                        items(
+                            items = filteredApps,
+                            key = { it.app.packageName } // 👈 clave única por app
+                        ) { blockedApp ->
+                            val iconBitmap by produceState<ImageBitmap?>(initialValue = blockedApp.app.icon, key1 = blockedApp.app.packageName) {
+                                if (value == null) {
+                                    val pm = context.packageManager
+                                    val info = pm.getApplicationInfo(blockedApp.app.packageName, 0)
+                                    value = info.loadIcon(pm).toBitmap().asImageBitmap()
+                                }
+                            }
+
+                            val appWithIcon = blockedApp.copy(app = blockedApp.app.copy(icon = iconBitmap))
+
+                            val isRestrictedNow = if (selectedTab == 0) {
+                                isRestrictedNow(blockedApp.restrictions)
+                            } else {
+                                isUsageLimitRestrictedNow(
+                                    context,
+                                    blockedApp.app.packageName,
+                                    blockedApp.limitUsageByDay
+                                )
+                            }
+
+                            BlockedAppRow(appWithIcon, isRestrictedNow) {
                                 if (!isRestrictedNow) {
-                                    if (isAccessibilityServiceEnabled(context, AppBlockerService::class.java)) {
+                                    if (isAccessibilityServiceEnabled(context, UnifiedBlockerService::class.java)) {
                                         selectedApp = blockedApp.app
-                                        selectedRestrictions = blockedApp.restrictions
-                                        showScheduledialog = true
+                                        if (selectedTab == 0) {
+                                            selectedRestrictions = blockedApp.restrictions
+                                            showScheduledialog = true
+                                        } else {
+                                            val existingLimits = blockedApp.limitUsageByDay
+                                            selectedDaysForLimit = existingLimits.keys
+                                            selectedLimit = existingLimits.entries.firstOrNull()?.value
+                                            showUsageLimitDialog = true
+                                        }
                                         restrictionEditError = null
                                     } else {
                                         showAccessibilityDialog = true
                                     }
                                 } else {
-                                    restrictionEditError = "No puedes editar esta aplicación durante su horario de restricción."
-                                }
-                            } else {
-                                if (!isRestrictedNow) {
-                                    // Límite de uso
-                                    if (isAccessibilityServiceEnabled(context, AppBlockerService::class.java)) {
-                                        selectedApp = blockedApp.app
-
-                                        // Obtener los límites de uso reales de Firestore (ya cargados en memoria)
-                                        val existingLimits = blockedApp.limitUsageByDay
-
-                                        if (existingLimits.isNotEmpty()) {
-                                            selectedDaysForLimit = existingLimits.keys
-                                            selectedLimit = existingLimits.entries.first().value
-                                        } else {
-                                            selectedDaysForLimit = emptySet()
-                                            selectedLimit = null
-                                        }
-
-                                        showUsageLimitDialog = true
-                                    } else {
-                                        showAccessibilityDialog = true
-                                    }
-                                } else{
-                                    restrictionEditError = "No puedes editar esta aplicación durante su horario de restricción."
+                                    restrictionEditError =
+                                        "No puedes editar esta aplicación durante su horario de restricción."
                                 }
                             }
                         }
@@ -289,83 +309,100 @@ fun AppBloqScreen(navController: NavController) {
                 }
             }
 
-            // ✅ Mostrar mensaje de límite alcanzado
-            if (showLimitMessage) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
+            // ✅ Mensajes justo encima del botón
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
+            ) {
+                if (showLimitMessage) {
                     Text(
                         text = "Has alcanzado el límite de apps a restringir para tu plan.\nSi quieres restringir más apps, mejora tu plan.",
-                        color = Color(0xFFFF4C4C), // rojo más intenso
+                        color = Color(0xFFFF4C4C),
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold,
                         textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(horizontal = 16.dp)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    Button(
-                        onClick = { navController.navigate(Screen.PlansScreen.route) },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF5A4F8D)) // mismo que "Restringir app"
+                    Box(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Text("Mejorar plan", color = Color.White)
+                        Button(
+                            onClick = { navController.navigate(Screen.PlansScreen.route) },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF5A4F8D))
+                        ) {
+                            Text("Mejorar plan", color = Color.White)
+                        }
                     }
                 }
-            }
 
-
-            // ✅ Estilo unificado para el mensaje de error de edición
-            restrictionEditError?.let { errorMsg ->
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
+                restrictionEditError?.let { errorMsg ->
                     Text(
                         text = errorMsg,
-                        color = Color(0xFFFF4C4C), // mismo rojo intenso
+                        color = Color(0xFFFF4C4C),
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold,
                         textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(horizontal = 16.dp)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp)
                     )
                 }
-            }
 
-            Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
-            // Botón
-            Button(
-                onClick = {
-                    if (limitReached) {
-                        showLimitMessage = true
-                    } else {
-                        showLimitMessage = false
-                        if (isAccessibilityServiceEnabled(context, AppBlockerService::class.java)) {
-                            showAppPicker = true
-                        } else {
+                Button(
+                    onClick = {
+                        // ✅ Primero comprobar accesibilidad
+                        if (!isAccessibilityServiceEnabled(context, UnifiedBlockerService::class.java)) {
                             showAccessibilityDialog = true
+                        } else {
+                            // ✅ Luego comprobar límite del plan
+                            if (limitReached) {
+                                showLimitMessage = true
+                            } else {
+                                // ✅ Filtrar apps disponibles solo si no se ha alcanzado el límite
+                                val blockedPackageNames = if (selectedTab == 0) {
+                                    bloquedApps.filter { it.restrictions.isNotEmpty() }
+                                        .map { it.app.packageName }
+                                } else {
+                                    bloquedApps.filter { it.limitUsageByDay.isNotEmpty() }
+                                        .map { it.app.packageName }
+                                }
+
+                                val availableApps = installedApps.filter { it.packageName !in blockedPackageNames }
+
+                                if (availableApps.isEmpty()) {
+                                    Toast.makeText(
+                                        context,
+                                        "No hay apps disponibles para agregar",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                } else {
+                                    showAppPicker = true
+                                    appPickerApps = availableApps
+                                }
+                            }
                         }
-                    }
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF5A4F8D)),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
-            ) {
-                Text("Restringir app", color = Color.White)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF5A4F8D)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Restringir app", color = Color.White)
+                }
             }
         }
 
         // App picker
         if (showAppPicker) {
             AppPickerDialog(
-                apps = installedApps,
+                apps = appPickerApps,
                 onAppSelected = { app ->
                     selectedApp = app
                     selectedRestrictions = emptyList()
@@ -422,7 +459,8 @@ fun AppBloqScreen(navController: NavController) {
                     showScheduledialog = false
                     selectedRestrictions = emptyList()
                     selectedApp = null
-                }
+                },
+                adViewModel
             )
         }
 
@@ -430,6 +468,8 @@ fun AppBloqScreen(navController: NavController) {
         if (showUsageLimitDialog && selectedApp != null) {
             UsageLimitDialog(
                 appName = selectedApp!!.appName,
+                appPackage = selectedApp!!.packageName,
+                navController = navController,
                 initialLimit = selectedLimit,
                 initialDays = selectedDaysForLimit,
                 onConfirm = { limitDuration, days ->
@@ -469,6 +509,7 @@ fun AppBloqScreen(navController: NavController) {
                         currentData["appName"] = selectedApp!!.appName
                         currentData["packageName"] = selectedApp!!.packageName
                         currentData["limit_usage"] = mapToStore
+                        currentData["unlock_day_paid"] = false
 
                         docRef.set(currentData)
                             .addOnSuccessListener {
@@ -488,60 +529,21 @@ fun AppBloqScreen(navController: NavController) {
                     selectedApp = null
                     selectedLimit = null
                     selectedDaysForLimit = emptySet()
-                }
+                },
+                adViewModel
             )
         }
 
         // 🔔 Dialogo de acceso a accesibilidad
         if (showAccessibilityDialog) {
-            Dialog(onDismissRequest = { showAccessibilityDialog = false }) {
-                Card(
-                    shape = RoundedCornerShape(16.dp),
-                    backgroundColor = Color(0xFF1E1E1E)
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .padding(20.dp)
-                            .fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = "Permiso requerido",
-                            fontSize = 20.sp,
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            textAlign = TextAlign.Center
-                        )
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        Text(
-                            text = "Para bloquear aplicaciones, debes activar el servicio de accesibilidad.\n\n" +
-                                    "Ruta: Ajustes > Accesibilidad > Aplicaciones instaladas > DetoxApp",
-                            color = Color.LightGray,
-                            fontSize = 16.sp,
-                            textAlign = TextAlign.Center
-                        )
-
-                        Spacer(modifier = Modifier.height(24.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceEvenly
-                        ) {
-                            TextButton(onClick = { showAccessibilityDialog = false }) {
-                                Text("Cancelar", color = Color.White)
-                            }
-                            TextButton(onClick = {
-                                openAccessibilitySettings(context)
-                                showAccessibilityDialog = false
-                            }) {
-                                Text("Ir a ajustes", color = Color.White)
-                            }
-                        }
-                    }
+            AccessibilityPermissionDialog(
+                showDialog = showAccessibilityDialog,
+                onDismiss = { showAccessibilityDialog = false },
+                onGoToSettings = {
+                    openAccessibilitySettings(context)
+                    showAccessibilityDialog = false
                 }
-            }
+            )
         }
     }
 }
@@ -664,7 +666,8 @@ fun ScheduleDialog(
     navController: NavController,
     initialRestrictions: List<AppRestriction>,
     onConfirm: (AppRestriction) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    adViewModel: AdViewModel
 ) {
     val context = LocalContext.current
     val combinedDays = initialRestrictions.flatMap { it.days }.toSet()
@@ -764,8 +767,28 @@ fun ScheduleDialog(
                             } else if (!from.isBefore(to)) {
                                 errorText = "La hora de inicio debe ser anterior a la hora de fin"
                             } else {
-                                errorText = null
-                                onConfirm(AppRestriction(selectedDays, from, to))
+                                val activity = context as? Activity
+                                val ad = adViewModel.restrictAppAd   // 🔹 Usamos el anuncio correcto
+
+                                if (ad != null && activity != null) {
+                                    ad.fullScreenContentCallback = object : FullScreenContentCallback() {
+                                        override fun onAdDismissedFullScreenContent() {
+                                            adViewModel.clearRestrictionAppAd()
+                                            adViewModel.loadRestrictAppsAd() // 🔹 recargar para próxima vez
+                                            errorText = null
+                                            onConfirm(AppRestriction(selectedDays, from, to))
+                                        }
+
+                                        override fun onAdFailedToShowFullScreenContent(adError: AdError) {
+                                            errorText = null
+                                            onConfirm(AppRestriction(selectedDays, from, to))
+                                        }
+                                    }
+                                    ad.show(activity)
+                                } else {
+                                    errorText = null
+                                    onConfirm(AppRestriction(selectedDays, from, to))
+                                }
                             }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF5A4F8D))
@@ -847,11 +870,16 @@ fun ScheduleDialog(
 @Composable
 fun UsageLimitDialog(
     appName: String,
+    appPackage: String,
+    navController: NavController,
     initialLimit: Duration? = null,
     initialDays: Set<DayOfWeek> = emptySet(),
     onConfirm: (Duration, Set<DayOfWeek>) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    adViewModel: AdViewModel
 ) {
+    val context = LocalContext.current
+    val userId = FirebaseAuth.getInstance().currentUser?.uid ?: ""
     var selectedDays by remember { mutableStateOf(initialDays) }
 
     // Usamos strings para manejar mejor la entrada
@@ -867,6 +895,8 @@ fun UsageLimitDialog(
     }
 
     var errorText by remember { mutableStateOf<String?>(null) }
+    var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+    var isDeleting by remember { mutableStateOf(false) }
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
@@ -878,7 +908,7 @@ fun UsageLimitDialog(
                 .padding(8.dp)
         ) {
             Column(
-                modifier = Modifier.padding(16.dp),
+                modifier = Modifier.padding(4.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
@@ -1021,36 +1051,134 @@ fun UsageLimitDialog(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                    OutlinedButton(
-                        onClick = onDismiss,
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF5A4F8D))
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    // Fila superior: Cancelar y Añadir
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Cancelar", color = Color.White)
+                        OutlinedButton(
+                            onClick = onDismiss,
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF5A4F8D)),
+                            modifier = Modifier.weight(0.625f)
+                        ) {
+                            Text("Cancelar", color = Color.White)
+                        }
+
+                        Spacer(modifier = Modifier.width(4.dp)) // pequeño espacio entre los botones
+
+                        Button(
+                            onClick = {
+                                val h = hoursText.toIntOrNull() ?: 0
+                                val m = minutesText.toIntOrNull() ?: 0
+                                if (selectedDays.isEmpty()) {
+                                    errorText = "Selecciona al menos un día"
+                                } else if (h == 0 && m == 0) {
+                                    errorText = "La duración debe ser mayor a 0"
+                                } else {
+                                    val activity = context as? Activity
+                                    val ad = adViewModel.restrictAppAd
+                                    if (ad != null && activity != null) {
+                                        ad.fullScreenContentCallback = object : FullScreenContentCallback() {
+                                            override fun onAdDismissedFullScreenContent() {
+                                                adViewModel.clearRestrictionAppAd()
+                                                adViewModel.loadRestrictAppsAd()
+                                                errorText = null
+                                                onConfirm(Duration.ofHours(h.toLong()).plusMinutes(m.toLong()), selectedDays)
+                                            }
+
+                                            override fun onAdFailedToShowFullScreenContent(adError: AdError) {
+                                                errorText = null
+                                                onConfirm(Duration.ofHours(h.toLong()).plusMinutes(m.toLong()), selectedDays)
+                                            }
+                                        }
+                                        ad.show(activity)
+                                    } else {
+                                        errorText = null
+                                        onConfirm(Duration.ofHours(h.toLong()).plusMinutes(m.toLong()), selectedDays)
+                                    }
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF5A4F8D)),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Añadir restricción", color = Color.White, maxLines = 1)
+                        }
                     }
 
-                    Button(
-                        onClick = {
-                            val h = hoursText.toIntOrNull() ?: 0
-                            val m = minutesText.toIntOrNull() ?: 0
-                            if (selectedDays.isEmpty()) {
-                                errorText = "Selecciona al menos un día"
-                            } else if (h == 0 && m == 0) {
-                                errorText = "La duración debe ser mayor a 0"
-                            } else {
-                                errorText = null
-                                onConfirm(Duration.ofHours(h.toLong()).plusMinutes(m.toLong()), selectedDays)
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF5A4F8D))
+                    Spacer(modifier = Modifier.height(12.dp)) // separación entre filas
+
+                    // Fila inferior: Eliminar centrado
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center
                     ) {
-                        Text("Añadir restrición", color = Color.White)
+                        OutlinedButton(
+                            onClick = { showDeleteConfirmDialog = true },
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Gray)
+                        ) {
+                            Text("Eliminar restricción", color = Color.Gray)
+                        }
                     }
                 }
             }
         }
     }
+    if (showDeleteConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { if (!isDeleting) showDeleteConfirmDialog = false },
+            title = {
+                Text("¿Eliminar restricciones?", color = Color.White)
+            },
+            text = {
+                Text(
+                    "¿Estás seguro de que quieres cancelar las restricciones para $appName?",
+                    color = Color.LightGray
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        isDeleting = true
+                        val docRef = FirebaseFirestore.getInstance()
+                            .collection("users")
+                            .document(userId)
+                            .collection("restrictions")
+                            .document(appPackage)
+
+                        docRef.delete()
+                            .addOnSuccessListener {
+                                Toast.makeText(context, "Restricciones eliminadas", Toast.LENGTH_SHORT).show()
+                                isDeleting = false
+                                showDeleteConfirmDialog = false
+                                onDismiss()
+                                navController.navigate(Screen.AppBloq.route)
+                            }
+                            .addOnFailureListener { e ->
+                                Toast.makeText(context, "Error eliminando restricciones: ${e.message}", Toast.LENGTH_LONG).show()
+                                isDeleting = false
+                            }
+                    },
+                    enabled = !isDeleting
+                ) {
+                    Text("Confirmar", color = Color.Red)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { if (!isDeleting) showDeleteConfirmDialog = false },
+                    enabled = !isDeleting
+                ) {
+                    Text("Cancelar", color = Color.White)
+                }
+            },
+            backgroundColor = Color(0xFF1E1E1E),
+            shape = RoundedCornerShape(12.dp)
+        )
+    }
 }
+
 
 @Composable
 fun TimePickerField(label: String, time: LocalTime, onTimeSelected: (LocalTime) -> Unit) {
@@ -1076,32 +1204,6 @@ fun isRestrictedNow(restrictions: List<AppRestriction>): Boolean {
     val today = LocalDate.now().dayOfWeek
     return restrictions.any { today in it.days && now in it.from..it.to }
 }
-
-fun getInstalledApps(context: Context): List<InstalledAppInfo> {
-    val pm = context.packageManager
-    val apps = pm.getInstalledApplications(PackageManager.GET_META_DATA)
-
-    return apps
-        .filter { appInfo ->
-            // Opcional: filtrar solo apps de usuario (excluye apps del sistema)
-            pm.getLaunchIntentForPackage(appInfo.packageName) != null
-        }
-        .map { appInfo ->
-            val name = pm.getApplicationLabel(appInfo).toString()
-            val iconBitmap = try {
-                appInfo.loadIcon(pm).toBitmap().asImageBitmap()
-            } catch (e: Exception) {
-                null
-            }
-            InstalledAppInfo(
-                packageName = appInfo.packageName,
-                appName = name,
-                icon = iconBitmap
-            )
-        }
-        .sortedBy { it.appName.lowercase() }
-}
-
 
 fun findInstalledAppByPackage(
     installedApps: List<InstalledAppInfo>,
@@ -1138,6 +1240,18 @@ fun isUsageLimitRestrictedNow(
     return usedDuration >= limit
 }
 
+suspend fun loadUserPlan(userId: String): String = withContext(Dispatchers.IO) {
+    val doc = FirebaseFirestore.getInstance()
+        .collection("users")
+        .document(userId)
+        .collection("plan")
+        .document("plan")
+        .get()
+        .await()
+
+    doc.getString("plan") ?: "base_plan"
+}
+
 suspend fun enforcePlanLimit(
     apps: List<BlockedApp>,
     userPlan: String,
@@ -1169,3 +1283,4 @@ suspend fun enforcePlanLimit(
 
     return toKeep
 }
+

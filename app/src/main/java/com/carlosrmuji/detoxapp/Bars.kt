@@ -22,6 +22,7 @@ import androidx.compose.material.TextButton
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AppBlocking
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Groups
@@ -29,6 +30,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.PhoneDisabled
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
@@ -476,6 +478,33 @@ fun BottomBarIndividual(
                 fontSize = 12.sp
             )
         }
+
+
+
+        // Restringir movil
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.clickable {
+                Log.d("BottomBar", "Navigating to Ranking")
+                navController.navigate(Screen.PhoneBloq.route) {
+                    popUpTo(navController.graph.startDestinationId)
+                    launchSingleTop = true
+                }
+            }
+        ) {
+            Icon(
+                imageVector = Icons.Default.PhoneDisabled,
+                contentDescription = "Phone Bloq",
+                tint = if (navController.currentDestination?.route == Screen.PhoneBloq.route) Color.White else Color.Gray,
+                modifier = Modifier.size(24.dp)
+            )
+            Text(
+                "Desconexión",
+                color = if (navController.currentDestination?.route == Screen.PhoneBloq.route) Color.White else Color.Gray,
+                fontSize = 12.sp
+            )
+        }
+
 
         //Groups button
         Column(

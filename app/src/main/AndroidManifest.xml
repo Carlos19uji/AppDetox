@@ -8,6 +8,11 @@
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"
         tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="com.google.android.gms.permission.AD_ID" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Este permiso es clave para reprogramar alarmas tras reiniciar el dispositivo -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
 
     <!-- Para consultar otras apps -->
     <queries>
@@ -91,13 +96,20 @@
 
         <!-- Pantalla de bloqueo -->
         <activity
-            android:name=".BlockedAppActivity"
+            android:name=".Restrictions.BlockedAppActivity"
             android:exported="false"
             android:theme="@style/Theme.DetoxApp" />
 
+        <!-- Pantalla de bloqueo total del teléfono -->
+        <activity
+            android:name=".Restrictions.PhoneBlockedActivity"
+            android:exported="true"
+            android:theme="@style/Theme.DetoxApp"
+            android:screenOrientation="portrait" />
+
         <!-- Servicio de accesibilidad para bloquear apps aunque la app esté cerrada -->
         <service
-            android:name=".AppBlockerService"
+            android:name=".Restrictions.UnifiedBlockerService"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
             android:exported="true">
             <intent-filter>
@@ -107,6 +119,12 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/accessibility_service_config" />
         </service>
+
+        <!-- ✅ Servicio Foreground para notificaciones de uso -->
+        <service
+            android:name=".Notifications.UsageNotificationService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
 
     </application>
 </manifest>

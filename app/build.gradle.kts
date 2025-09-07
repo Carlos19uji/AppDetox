@@ -15,8 +15,8 @@ android {
         applicationId = "com.carlosrmuji.detoxapp"
         minSdk = 26
         targetSdk = 35
-        versionCode = 10
-        versionName = "1.3.0"
+        versionCode = 14
+        versionName = "1.3.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -104,6 +104,7 @@ dependencies {
 
     // Firebase
     implementation(platform("com.google.firebase:firebase-bom:33.9.0"))
+    implementation("com.google.firebase:firebase-perf")
     implementation("com.google.firebase:firebase-analytics:21.0.0")
     implementation("com.google.firebase:firebase-auth-ktx")
     implementation("com.google.firebase:firebase-auth")

@@ -1,15 +1,12 @@
-package com.carlosrmuji.detoxapp
+package com.carlosrmuji.detoxapp.Groups
 
 import android.app.Activity
-import android.util.Log
-import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -20,9 +17,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CheckboxDefaults
@@ -41,7 +35,6 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -52,31 +45,30 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.google.firebase.Firebase
+import com.carlosrmuji.detoxapp.Billing.AdViewModel
+import com.carlosrmuji.detoxapp.Challenge
+import com.carlosrmuji.detoxapp.GroupViewModel
+import com.carlosrmuji.detoxapp.PhaseInfo
+import com.carlosrmuji.detoxapp.ReductionConfig
+import com.carlosrmuji.detoxapp.Screen
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FieldPath
-import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.text.SimpleDateFormat
+import java.time.Instant
 import java.time.LocalDate
-import java.time.LocalDateTime
+import java.time.ZoneId
+import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Calendar
-import java.util.Date
 import java.util.Locale
 import java.util.UUID
-import kotlin.math.max
 import kotlin.math.pow
-import kotlin.math.roundToInt
-
 
 
 @Composable
@@ -413,8 +405,8 @@ fun showChallengeDialog(
 
     // 🔍 Buscar si ya existe reflexión para hoy
     LaunchedEffect(Unit) {
-        val now = LocalDateTime.now()
-        val dateOnly = now.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+        val spainZone = ZoneId.of("Europe/Madrid")
+        val todaySpain = LocalDate.now(spainZone)
 
         val messagesRef = db.collection("users").document(userId)
             .collection("groups").document(groupId)
@@ -424,7 +416,14 @@ fun showChallengeDialog(
             .whereEqualTo("userId", userId)
             .get().await()
             .documents
-            .find { it.getString("timestamp")?.startsWith(dateOnly) == true }
+            .find { doc ->
+                runCatching {
+                    val ts = doc.getString("timestamp") ?: return@find false
+                    val instant = Instant.parse(ts)
+                    val msgDateSpain = instant.atZone(spainZone).toLocalDate()
+                    msgDateSpain.isEqual(todaySpain)
+                }.getOrDefault(false)
+            }
 
         alreadyWritten = existing != null
     }
@@ -436,8 +435,12 @@ fun showChallengeDialog(
                 if (isReflectionChallenge && alreadyWritten == false) {
                     TextButton(onClick = {
                         coroutineScope.launch {
-                            val now = LocalDateTime.now()
-                            val timestamp = now.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
+
+
+                            val spainZone = ZoneId.of("Europe/Madrid")
+                            val nowSpain = ZonedDateTime.now(spainZone)
+                            val timestamp = nowSpain.toInstant().toString() // 🔹 UTC consistente con Messages
+
                             val messageId = UUID.randomUUID().toString()
 
                             val message = mapOf(
@@ -590,7 +593,7 @@ fun getPhaseDetails(phase: Int): PhaseInfo {
     }
 }
 
-fun getPhaseObjective(phase: Int, targetDuration: Long): PhaseInfo{
+fun getPhaseObjective(phase: Int, targetDuration: Long): PhaseInfo {
     return when (phase) {
             1 -> PhaseInfo(1, 5, "Estas en la fase 1 del reto, tu objetivo para esta semana es ir aplicando pequeños cambios en tu uso de movil mientras empezamos a recopilar datos sobre tu tiempo de uso diario.")
             2 -> PhaseInfo(2, 7, "Estas en la fase 2 del reto, tu objetivo para esta semana es reducir el tiempo de uso a un maximo de ${formatDuration(targetDuration)} al día. Para lograr este objetivo manten los retos que hiciste en fases anteriores e implementa los nuevos habitos/retos de esta fase.")
