@@ -53,7 +53,6 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.carlosrmuji.detoxapp.Notifications.UsageNotificationService
-import com.example.detoxapp.ui.theme.DetoxAppTheme
 import com.google.accompanist.insets.ProvideWindowInsets
 import com.google.android.gms.ads.MobileAds
 import com.google.android.gms.auth.api.signin.GoogleSignIn
@@ -142,7 +141,6 @@ class MainActivity : ComponentActivity() {
 
 
         setContent {
-            DetoxAppTheme {
                 ProvideWindowInsets {
                     navController = rememberNavController()
                     MainApp(
@@ -151,7 +149,6 @@ class MainActivity : ComponentActivity() {
                         onGoogleSignIn = { signInWithGoogle() }
                     )
                 }
-            }
         }
     }
 
